@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <title>SIMKA GenBI UNG</title>
+  <!-- Google Fonts Poppins & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- CSS Styles Injection -->
+  <?!= include('CSS'); ?>
+</head>
+<body>
+
+  <!-- Dynamic Gradient Mesh Background -->
+  <div class="gradient-mesh"></div>
+
+  <!-- Global Loader Bar -->
+  <div class="global-loader" id="app-loader">
+    <div class="global-loader-bar"></div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ----------------------------------------------------
+   * LOGIN SCREEN OVERLAY
+   * ---------------------------------------------------- -->
+  <div class="login-overlay" id="login-screen" style="display: none;">
+    <div class="login-card">
+      <div class="login-logo">
+        <span>G</span>
+      </div>
+      <h2 class="display-lg" style="margin-bottom: 8px;">SIMKA GenBI UNG</h2>
+      <p style="color: var(--ink-mute); font-size: 14px; margin-bottom: 32px;">
+        Sistem Informasi Monitoring Keaktifan Anggota. Silakan masuk untuk mengelola data.
+      </p>
+      
+      <form onsubmit="handleLogin(event)">
+        <div class="form-group" style="text-align: left;">
+          <label class="form-label" for="login-operator-select">Pilih Akun Operator</label>
+          <select class="form-control" id="login-operator-select" required>
+            <option value="">-- Memuat Operator... --</option>
+          </select>
+        </div>
+        
+        <div class="form-group" style="text-align: left; margin-bottom: 28px;">
+          <label class="form-label" for="login-pin-input">PIN Keamanan</label>
+          <input type="password" class="form-control" id="login-pin-input" placeholder="Masukkan PIN 4-6 digit" required pattern="[0-9]*">
+        </div>
+        
+        <button type="submit" class="btn btn-primary" style="width: 100%; height: 42px;">
+          Masuk ke Dashboard
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ----------------------------------------------------
+   * APPLICATION SIDEBAR
+   * ---------------------------------------------------- -->
+  <div class="sidebar" id="app-sidebar" style="display: none;">
+    <div class="logo-container">
+      <div class="logo-icon">G</div>
+      <div>
+        <h1 class="logo-text">SIMKA</h1>
+        <div class="logo-sub">GenBI UNG</div>
+      </div>
+    </div>
+
+    <!-- Navigation links -->
+    <ul class="nav-links">
+      <li>
+        <div class="nav-item active" onclick="showTab('dashboard-tab')">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+          </svg>
+          Dashboard
+        </div>
+      </li>
+      <li>
+        <div class="nav-item" onclick="showTab('members-tab')">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.109A11.386 11.386 0 0110.089 20c-2.202 0-4.264-.626-6.009-1.714v-.115a4.125 4.125 0 017.533-2.493c.501.91.786 1.957.786 3.07M11.25 6.75a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zM20.25 6.75a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+          </svg>
+          Daftar Anggota
+        </div>
+      </li>
+      <li>
+        <div class="nav-item" onclick="showTab('input-tab')">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Input Penugasan
+        </div>
+      </li>
+      <li>
+        <div class="nav-item" onclick="showTab('grade-tab')">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.03 0 1.9.693 2.166 1.638m-7.377 2.24l-.407-.051a2.25 2.25 0 00-2.518 2.223v8.441a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-8.441a2.25 2.25 0 00-2.518-2.223l-.407.051" />
+          </svg>
+          Penilaian Bulanan
+        </div>
+      </li>
+      <li>
+        <div class="nav-item" onclick="showTab('recap-tab')">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75c.621 0 1.125.504 1.125 1.125v12.75c0 .621-.504 1.125-1.125 1.125H5.625a1.125 1.125 0 01-1.125-1.125V5.625c0-.621.504-1.125 1.125-1.125z" />
+          </svg>
+          Rekap Bulanan
+        </div>
+      </li>
+      <li>
+        <div class="nav-item" id="nav-admin" onclick="showTab('admin-tab')">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774a1.125 1.125 0 01.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527a1.125 1.125 0 01-1.448-.12l-.774-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          Sistem & Audit
+        </div>
+      </li>
+    </ul>
+
+    <!-- Operator Profile Box -->
+    <div class="sidebar-footer">
+      <div class="operator-profile-card">
+        <div class="operator-avatar" id="sidebar-op-avatar">O</div>
+        <div class="operator-info">
+          <div class="operator-name" id="sidebar-op-name">Nama Operator</div>
+          <div class="operator-role" id="sidebar-op-role">JABATAN - DIVISI</div>
+        </div>
+      </div>
+      <button class="logout-btn" onclick="handleLogout()">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:14px;height:14px;">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+        </svg>
+        Keluar Sesi
+      </button>
+    </div>
+  </div>
+
+  <!-- ----------------------------------------------------
+   * MAIN CONTENT AREA
+   * ---------------------------------------------------- -->
+  <div class="main-content" id="app-main" style="display: none;">
+    
+    <!-- Mobile Header Trigger -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;" class="only-mobile">
+      <button class="btn btn-secondary" onclick="toggleSidebar()" style="height:32px; padding: 4px 12px; font-size:12px;">
+        ☰ Menu
+      </button>
+      <span class="logo-text" style="font-size:16px;">SIMKA GenBI UNG</span>
+    </div>
+
+    <!-- ----------------------------------------------------
+     * TAB PANEL: DASHBOARD
+     * ---------------------------------------------------- -->
+    <div class="tab-panel" id="dashboard-tab">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 24px;">
+        <div>
+          <h1 class="display-xl" style="margin-bottom: 4px;">Ringkasan Keaktifan</h1>
+          <p style="color: var(--ink-mute); font-size: 14px;">
+            Statistik keterlibatan dan kontribusi pengurus taktis GenBI UNG.
+          </p>
+        </div>
+        <!-- Divisi Filter (Only shown/accessible for BPH, locked for Kadiv) -->
+        <div class="form-group" style="margin-bottom: 0; min-width: 200px;" id="dash-filter-container">
+          <label for="dash-divisi-filter" class="form-label" style="font-size: 11px; margin-bottom: 4px;">Filter Divisi</label>
+          <select id="dash-divisi-filter" class="form-control" onchange="renderDashboard()" style="padding: 6px 12px; font-size: 13px;">
+            <option value="Semua">Semua Divisi</option>
+            <option value="Pendidikan">Pendidikan</option>
+            <option value="Kominfo">Kominfo</option>
+            <option value="Lingkungan Hidup">Lingkungan Hidup</option>
+            <option value="Kesehatan Masyarakat">Kesehatan Masyarakat</option>
+            <option value="Kewirausahaan">Kewirausahaan</option>
+            <option value="Potensi Diri">Potensi Diri</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Stat Cards -->
+      <div class="dashboard-grid">
+        <div class="stat-card">
+          <div class="stat-label">Anggota Taktis Aktif</div>
+          <div class="stat-value" id="dash-total-anggota">0</div>
+          <div class="stat-sub">Terdaftar di 6 divisi resmi</div>
+        </div>
+        <div class="stat-card ruby">
+          <div class="stat-label">Total Log Kegiatan</div>
+          <div class="stat-value" id="dash-total-kegiatan">0</div>
+          <div class="stat-sub">Tercatat di Kegiatan_Log</div>
+        </div>
+        <div class="stat-card magenta">
+          <div class="stat-label">Rasio Keaktifan</div>
+          <div class="stat-value" id="dash-avg-kegiatan">0.0</div>
+          <div class="stat-sub">Rata-rata kegiatan per anggota</div>
+        </div>
+      </div>
+
+      <!-- Division Statistics Chart -->
+      <div class="chart-container">
+        <h2 class="heading-lg" style="margin-bottom: 6px;">Total Keaktifan Berdasarkan Divisi</h2>
+        <p style="color: var(--ink-mute); font-size: 12px; margin-bottom: 20px;">
+          Grafik kontribusi proker gabungan dari 6 divisi organisasi (Excluding BPH/Kadiv).
+        </p>
+        
+        <!-- SVG Bar Chart -->
+        <svg id="bar-chart-container" class="bar-chart-svg">
+          <defs>
+            <linearGradient id="bar-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="var(--magenta)" />
+              <stop offset="100%" stop-color="var(--primary)" />
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+
+      <!-- Dual Board Panels -->
+      <div class="panel-grid">
+        <!-- Zona Kontributor Utama (Kiri) -->
+        <div class="panel-card">
+          <div class="panel-header">
+            <h2 class="heading-lg">Zona Kontributor Utama</h2>
+            <span class="badge badge-primary">Keaktifan Tertinggi</span>
+          </div>
+          <p style="color: var(--ink-mute); font-size: 12px; margin-bottom: 20px;">
+            10 Anggota dengan total keterlibatan kegiatan terbanyak.
+          </p>
+          <div class="member-row-list" id="zona-kontributor-list">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Zona Prioritas Penugasan (Kanan) -->
+        <div class="panel-card">
+          <div class="panel-header">
+            <h2 class="heading-lg" style="color: var(--ruby);">Zona Prioritas Penugasan</h2>
+            <span class="badge badge-danger">Butuh Perhatian</span>
+          </div>
+          <p style="color: var(--ink-mute); font-size: 12px; margin-bottom: 20px;">
+            Daftar anggota dengan keaktifan terendah untuk prioritas program kerja berikutnya.
+          </p>
+          <div class="member-row-list" id="zona-prioritas-list">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ----------------------------------------------------
+     * TAB PANEL: MEMBERS DIRECTORY
+     * ---------------------------------------------------- -->
+    <div class="tab-panel" id="members-tab" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 16px;">
+        <div>
+          <h1 class="display-xl">Data Anggota</h1>
+          <p style="color: var(--ink-mute); font-size: 14px;">Master data identitas dan status keaktifan anggota.</p>
+        </div>
+        <button class="btn btn-primary" id="btn-tambah-anggota" onclick="openModal('add-member-modal')">
+          + Daftarkan Anggota
+        </button>
+      </div>
+
+      <!-- Statistics Counters per Gelombang -->
+      <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 24px; gap: 16px;">
+        <div class="stat-card" style="padding: 16px 20px;">
+          <div class="stat-label" style="font-size: 10px;">Penerimaan Ke-1</div>
+          <div class="stat-value" id="p1-count" style="font-size: 20px;">0 org</div>
+        </div>
+        <div class="stat-card" style="padding: 16px 20px;">
+          <div class="stat-label" style="font-size: 10px;">Penerimaan Ke-2</div>
+          <div class="stat-value" id="p2-count" style="font-size: 20px;">0 org</div>
+        </div>
+        <div class="stat-card" style="padding: 16px 20px;">
+          <div class="stat-label" style="font-size: 10px;">Penerimaan Ke-3</div>
+          <div class="stat-value" id="p3-count" style="font-size: 20px;">0 org</div>
+        </div>
+        <div class="stat-card" style="padding: 16px 20px;">
+          <div class="stat-label" style="font-size: 10px;">Penerimaan Ke-4</div>
+          <div class="stat-value" id="p4-count" style="font-size: 20px;">0 org</div>
+        </div>
+      </div>
+
+      <!-- Table Container -->
+      <div class="table-container">
+        <div class="table-controls">
+          <div class="search-wrapper">
+            <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.637 10.637z" />
+            </svg>
+            <input type="text" class="form-control" id="member-search" placeholder="Cari Nama atau NIM..." oninput="renderMembersTable()">
+          </div>
+          
+          <div class="filter-group">
+            <select class="form-control" id="filter-penerimaan" onchange="renderMembersTable()" style="max-width:140px;">
+              <option value="">Gelombang</option>
+              <option value="1">Penerimaan 1</option>
+              <option value="2">Penerimaan 2</option>
+              <option value="3">Penerimaan 3</option>
+              <option value="4">Penerimaan 4</option>
+            </select>
+            
+            <select class="form-control" id="filter-divisi" onchange="renderMembersTable()" style="max-width:160px;">
+              <option value="">Semua Divisi</option>
+              <option value="Pendidikan">Pendidikan</option>
+              <option value="Kominfo">Kominfo</option>
+              <option value="Lingkungan Hidup">Lingkungan Hidup</option>
+              <option value="Kesehatan Masyarakat">Kesehatan Masyarakat</option>
+              <option value="Kewirausahaan">Kewirausahaan</option>
+              <option value="Potensi Diri">Potensi Diri</option>
+              <option value="BPH">BPH</option>
+            </select>
+
+            <select class="form-control" id="filter-jabatan" onchange="renderMembersTable()" style="max-width:140px;">
+              <option value="">Semua Jabatan</option>
+              <option value="Ketua">Ketua</option>
+              <option value="Sekretaris">Sekretaris</option>
+              <option value="Bendahara">Bendahara</option>
+              <option value="Kadiv">Kadiv</option>
+              <option value="Anggota">Anggota</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th style="width: 80px;">ID</th>
+                <th>Nama Lengkap</th>
+                <th>NIM</th>
+                <th>Divisi</th>
+                <th>Gel. Penerimaan</th>
+                <th>Jabatan</th>
+                <th>Total Kegiatan</th>
+              </tr>
+            </thead>
+            <tbody id="members-table-body">
+              <!-- Rendered by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ----------------------------------------------------
+     * TAB PANEL: INPUT PENUGASAN (WHATSAPP PARSER)
+     * ---------------------------------------------------- -->
+    <div class="tab-panel" id="input-tab" style="display: none;">
+      <h1 class="display-xl">Catat Penugasan Baru</h1>
+      <p style="color: var(--ink-mute); font-size: 14px; margin-bottom: 32px;">
+        Pencatatan riwayat kegiatan/proker reguler. Gunakan input manual atau parser salinan teks grup WhatsApp.
+      </p>
+
+      <!-- Parser Split Container -->
+      <div class="parser-container">
+        
+        <!-- Left: Input Form (WhatsApp Parser / Manual) -->
+        <div class="parser-input-panel">
+          <h2 class="heading-md" style="color: var(--ink); margin-bottom: 20px;">1. Tempel Obrolan WhatsApp</h2>
+          
+          <div class="form-group">
+            <label class="form-label" for="wa-proker-input">Nama Program Kerja (Proker)</label>
+            <input type="text" class="form-control" id="wa-proker-input" placeholder="Contoh: Webinar Potensi Diri" required>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="wa-peran-select">Peran Delegasi</label>
+              <select class="form-control" id="wa-peran-select" required>
+                <option value="Panitia">Panitia</option>
+                <option value="Delegasi Kegiatan">Delegasi Kegiatan</option>
+                <option value="Delegasi Peserta">Delegasi Peserta</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="wa-tanggal-input">Tanggal Kegiatan</label>
+              <input type="date" class="form-control" id="wa-tanggal-input" required>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label" for="wa-paste-area">Salinan Teks Grup WhatsApp</label>
+            <textarea class="form-control" id="wa-paste-area" placeholder="Tempel chat di sini... Contoh: 1. Ahmad Dhani | 2. Budi Utomo - Pendidikan | 3. Cici Paramida" style="height: 180px;"></textarea>
+          </div>
+          
+          <div style="display: flex; gap: 12px; margin-top: 24px;">
+            <button class="btn btn-secondary" onclick="processWhatsAppList()" style="flex:1;">
+              Parse & Cocokkan Nama
+            </button>
+          </div>
+
+          <!-- Manual Penugasan Divider -->
+          <div style="margin: 32px 0 20px; border-top: 1px dashed var(--hairline); padding-top: 24px;">
+            <h2 class="heading-md" style="color: var(--ink); margin-bottom: 16px;">Alternatif: Catat Manual (1 Anggota)</h2>
+            <form onsubmit="handleAddPenugasanManual(event)">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="manual-proker-input">Nama Proker</label>
+                  <input type="text" class="form-control" id="manual-proker-input" placeholder="Nama Proker manual">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="manual-tanggal-input">Tanggal Kegiatan</label>
+                  <input type="date" class="form-control" id="manual-tanggal-input" required>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="manual-anggota-select">Pilih Anggota</label>
+                  <select class="form-control" id="manual-anggota-select">
+                    <!-- Loaded dynamically -->
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="manual-peran-select">Peran</label>
+                  <select class="form-control" id="manual-peran-select">
+                    <option value="Panitia">Panitia</option>
+                    <option value="Delegasi Kegiatan">Delegasi Kegiatan</option>
+                    <option value="Delegasi Peserta">Delegasi Peserta</option>
+                  </select>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary" style="width: 100%;">
+                Simpan Penugasan Manual
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Right: Fuzzy Match Preview -->
+        <div class="parser-preview-panel">
+          <h2 class="heading-md" style="color: var(--ink); margin-bottom: 6px;">2. Hasil Fuzzy Matching Cerdas</h2>
+          <p style="color: var(--ink-mute); font-size: 12px; margin-bottom: 20px;">
+            Tinjau hasil deteksi otomatis nama anggota terhadap database sebelum menyimpan.
+          </p>
+          
+          <div class="preview-row-list" id="wa-parsed-list">
+            <div style="text-align:center;padding:48px 24px;color:var(--ink-mute)">
+              Belum ada teks WhatsApp yang diproses. Silakan klik tombol "Parse & Cocokkan Nama" di panel kiri.
+            </div>
+          </div>
+          
+          <button id="btn-save-wa" class="btn btn-primary" onclick="saveWhatsAppList()" disabled style="margin-top: auto; width:100%; height:42px;">
+            Simpan Seluruh Delegasi Terpilih
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ----------------------------------------------------
+     * TAB PANEL: PENILAIAN BULANAN
+     * ---------------------------------------------------- -->
+    <div class="tab-panel" id="grade-tab" style="display: none;">
+      <h1 class="display-xl">Penilaian Kinerja Bulanan</h1>
+      <p style="color: var(--ink-mute); font-size: 14px; margin-bottom: 32px;">
+        Evaluasi terstruktur bulanan pengurus inti dan Kepala Divisi (Ketua & Kadiv bertindak sebagai evaluator).
+      </p>
+
+      <div class="panel-card" style="margin-bottom: 32px; border-left: 4px solid var(--primary);">
+        <p id="grading-role-alert" style="font-size: 14px; color: var(--ink-secondary);">
+          Mengecek wewenang penilai...
+        </p>
+      </div>
+
+      <div class="panel-card" id="grading-form-box">
+        <form onsubmit="savePenilaianBulanan(event)">
+          <div class="form-row" style="margin-bottom: 24px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" for="grading-month-input">Bulan Penilaian</label>
+              <input type="text" class="form-control" id="grading-month-input" readonly style="background-color: var(--canvas-soft); cursor: not-allowed;" required>
+            </div>
+          </div>
+          
+          <!-- Recipient List Container -->
+          <div id="grading-list-container" style="margin-bottom: 24px;">
+            <!-- Loaded dynamically by JS -->
+          </div>
+          
+          <button type="submit" class="btn btn-primary" style="height: 42px; width: 100%;">
+            Simpan Seluruh Nilai Bulanan
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ----------------------------------------------------
+     * TAB PANEL: REKAP BULANAN KEGIATAN
+     * ---------------------------------------------------- -->
+    <div class="tab-panel" id="recap-tab" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 24px;">
+        <div>
+          <h1 class="display-xl" style="margin-bottom: 4px;">Rekap Kegiatan Bulanan</h1>
+          <p style="color: var(--ink-mute); font-size: 14px;">
+            Daftar program kerja (proker) dan panitia pelaksana berdasarkan filter bulan.
+          </p>
+        </div>
+        <!-- Bulan Filter -->
+        <div class="form-group" style="margin-bottom: 0; min-width: 200px;">
+          <label for="recap-month-filter" class="form-label" style="font-size: 11px; margin-bottom: 4px;">Pilih Bulan</label>
+          <select id="recap-month-filter" class="form-control" onchange="onRecapMonthFilterChange()" style="padding: 6px 12px; font-size: 13px;">
+            <option value="">Memuat bulan...</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>Nama Program Kerja (Proker)</th>
+                <th style="text-align: center;">Bulan & Tahun</th>
+                <th style="text-align: center;">Jumlah Panitia / Peserta</th>
+                <th>Operator Perekam</th>
+              </tr>
+            </thead>
+            <tbody id="recap-tbody">
+              <!-- Loaded by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ----------------------------------------------------
+     * TAB PANEL: SETTINGS & SYSTEM ADMIN
+     * ---------------------------------------------------- -->
+    <div class="tab-panel" id="admin-tab" style="display: none;">
+      <h1 class="display-xl">Manajemen Sistem & Audit</h1>
+      <p style="color: var(--ink-mute); font-size: 14px; margin-bottom: 32px;">
+        Menu pemeliharaan database, cadangan otomatis Google Drive, dan log riwayat input operator.
+      </p>
+
+      <div class="dashboard-grid">
+        <!-- Card 1: Google Drive Backup -->
+        <div class="stat-card" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 220px;">
+          <div>
+            <div class="stat-label">Cadangan Google Drive</div>
+            <h3 class="heading-lg" style="margin-bottom: 6px;">Duplikasi Database</h3>
+            <p style="color: var(--ink-mute); font-size: 12px; line-height: 1.4;">
+              Secara otomatis dijalankan berkala mingguan via Trigger GAS. Gunakan tombol untuk mencadangkan database secara instan ke Drive.
+            </p>
+          </div>
+          <button class="btn btn-primary" onclick="executeManualBackup()" style="margin-top: 16px; align-self: flex-start;">
+            Mulai Backup Sekarang
+          </button>
+        </div>
+
+        <!-- Card 2: Import Latest Members -->
+        <div class="stat-card" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 220px;">
+          <div>
+            <div class="stat-label">Sinkronisasi Data Master</div>
+            <h3 class="heading-lg" style="margin-bottom: 6px;">Impor Anggota Terbaru</h3>
+            <p style="color: var(--ink-mute); font-size: 12px; line-height: 1.4; margin-bottom: 12px;">
+              Impor data pengurus Komisariat UNG terbaru beserta divisi, jabatan, dan gelombang penerimaan dari spreadsheet master eksternal.
+            </p>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="import-spreadsheet-url" class="form-label" style="font-size: 11px; margin-bottom: 4px; color: var(--ink-mute);">URL / ID Spreadsheet Master (Opsional)</label>
+              <input type="text" id="import-spreadsheet-url" class="form-control" placeholder="Kosongkan untuk default..." style="font-size: 12px; padding: 6px 10px; background-color: var(--canvas-soft);">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="executeImportGenbiData()" style="margin-top: 16px; align-self: flex-start;">
+            Impor Data Sekarang
+          </button>
+        </div>
+
+        <!-- Card 3: Aktifkan Bulan Penilaian (Khusus Sekretaris) -->
+        <div class="stat-card" id="admin-grading-activation-card" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 220px;">
+          <div>
+            <div class="stat-label">Pengaturan Penilaian</div>
+            <h3 class="heading-lg" style="margin-bottom: 6px;">Bulan Penilaian Aktif</h3>
+            <p style="color: var(--ink-mute); font-size: 12px; line-height: 1.4; margin-bottom: 12px;">
+              Tentukan bulan aktif pengisian nilai bulanan oleh Ketua & Kepala Divisi (Khusus Sekretaris).
+            </p>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="admin-active-month-select" class="form-label" style="font-size: 11px; margin-bottom: 4px; color: var(--ink-mute);">Bulan Penilaian Aktif</label>
+              <select id="admin-active-month-select" class="form-control" style="font-size: 12px; padding: 6px 10px; background-color: var(--canvas-soft);">
+                <option value="Januari">Januari</option>
+                <option value="Februari">Februari</option>
+                <option value="Maret">Maret</option>
+                <option value="April">April</option>
+                <option value="Mei">Mei</option>
+                <option value="Juni">Juni</option>
+                <option value="Juli">Juli</option>
+                <option value="Agustus">Agustus</option>
+                <option value="September">September</option>
+                <option value="Oktober">Oktober</option>
+                <option value="November">November</option>
+                <option value="Desember">Desember</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary" id="btn-save-active-month" onclick="saveActiveGradingMonth()" style="margin-top: 16px; align-self: flex-start;">
+            Aktifkan Bulan
+          </button>
+        </div>
+      </div>
+
+      <!-- Audit Logs Container -->
+      <div style="margin-top: 32px;">
+        <h2 class="display-lg" style="margin-bottom: 12px;">Log Audit Kegiatan Terbaru</h2>
+        <div class="table-container">
+          <div class="table-responsive">
+            <table class="custom-table" style="font-size:13px;">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Nama Proker</th>
+                  <th>ID Anggota</th>
+                  <th>Nama Anggota</th>
+                  <th>Peran</th>
+                  <th>Operator</th>
+                </tr>
+              </thead>
+              <tbody id="audit-kegiatan-tbody">
+                <!-- Loaded by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 32px;">
+        <h2 class="display-lg" style="margin-bottom: 12px;">Log Audit Penilaian Terbaru</h2>
+        <div class="table-container">
+          <div class="table-responsive">
+            <table class="custom-table" style="font-size:13px;">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Bulan</th>
+                  <th>ID Penerima</th>
+                  <th>Nama Penerima</th>
+                  <th>Jabatan</th>
+                  <th>Nilai</th>
+                  <th>Catatan</th>
+                  <th>ID Penilai</th>
+                  <th>Operator</th>
+                </tr>
+              </thead>
+              <tbody id="audit-penilaian-tbody">
+                <!-- Loaded by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ----------------------------------------------------
+   * MODAL: ADD NEW MEMBER
+   * ---------------------------------------------------- -->
+  <div class="modal-overlay" id="add-member-modal">
+    <div class="modal-box" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2 class="heading-lg">Mendaftarkan Anggota Baru</h2>
+        <button class="modal-close" onclick="closeModal('add-member-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="add-member-form" onsubmit="handleAddMember(event)">
+          <div class="form-group">
+            <label class="form-label" for="add-nama">Nama Lengkap</label>
+            <input type="text" class="form-control" id="add-nama" name="nama" placeholder="Contoh: ahmad dhani" required>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label" for="add-nim">NIM (Nomor Induk Mahasiswa)</label>
+            <input type="text" class="form-control" id="add-nim" name="nim" placeholder="Contoh: 151421001 (Hanya angka)" required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="add-divisi">Divisi Resmi</label>
+              <select class="form-control" id="add-divisi" name="divisi" required>
+                <option value="Pendidikan">Pendidikan</option>
+                <option value="Kominfo">Kominfo</option>
+                <option value="Lingkungan Hidup">Lingkungan Hidup</option>
+                <option value="Kesehatan Masyarakat">Kesehatan Masyarakat</option>
+                <option value="Kewirausahaan">Kewirausahaan</option>
+                <option value="Potensi Diri">Potensi Diri</option>
+                <option value="BPH">BPH (Ketua/Sek/Ben)</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label" for="add-penerimaan">Penerimaan Ke-</label>
+              <select class="form-control" id="add-penerimaan" name="penerimaanKe" required>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="add-jabatan">Jabatan Struktural</label>
+              <select class="form-control" id="add-jabatan" name="jabatan" required>
+                <option value="Anggota">Anggota</option>
+                <option value="Kadiv">Kadiv (Kepala Divisi)</option>
+                <option value="Bendahara">Bendahara</option>
+                <option value="Sekretaris">Sekretaris</option>
+                <option value="Ketua">Ketua</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label" for="add-pin">PIN Keamanan (Hanya Pengurus/Evaluator)</label>
+              <input type="password" class="form-control" id="add-pin" name="pin" placeholder="PIN login 4 digit (Opsional)">
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:28px;">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('add-member-modal')">Batal</button>
+            <button type="submit" class="btn btn-primary">Simpan Anggota Baru</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ----------------------------------------------------
+   * MODAL: MEMBER PROFILE DETAILS
+   * ---------------------------------------------------- -->
+  <div class="modal-overlay" id="profile-modal">
+    <div class="modal-box" style="max-width: 720px;">
+      <div class="modal-header">
+        <h2 class="heading-lg" id="profile-name">Nama Anggota</h2>
+        <button class="modal-close" onclick="closeModal('profile-modal')">✕</button>
+      </div>
+      <div class="modal-body" style="padding-top: 16px;">
+        
+        <!-- Header Info -->
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--hairline);">
+          <div>
+            <div style="font-size: 13px; color:var(--ink-mute); margin-bottom: 2px;">NIM: <span id="profile-nim" class="text-tabular" style="color:var(--ink);"></span></div>
+            <div style="font-size: 13px; color:var(--ink-mute);">Divisi: <span id="profile-divisi" style="color:var(--ink); font-weight:500;"></span></div>
+          </div>
+          <div>
+            <span id="profile-jabatan-badge" class="badge">ANGGOTA</span>
+            <span id="profile-penerimaan" class="badge badge-primary" style="margin-left: 6px;">GELOMBANG</span>
+          </div>
+        </div>
+
+        <!-- Sub counts metrics -->
+        <div class="dashboard-grid" style="grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
+          <div class="stat-card" style="padding: 12px 16px; text-align:center;">
+            <div class="stat-label" style="font-size:9px; margin-bottom:4px;">Kepanitiaan</div>
+            <div class="stat-value" id="profile-count-panitia" style="font-size: 22px;">0</div>
+          </div>
+          <div class="stat-card ruby" style="padding: 12px 16px; text-align:center;">
+            <div class="stat-label" style="font-size:9px; margin-bottom:4px;">Delegasi Keg</div>
+            <div class="stat-value" id="profile-count-del-keg" style="font-size: 22px;">0</div>
+          </div>
+          <div class="stat-card magenta" style="padding: 12px 16px; text-align:center;">
+            <div class="stat-label" style="font-size:9px; margin-bottom:4px;">Delegasi Pes</div>
+            <div class="stat-value" id="profile-count-del-pes" style="font-size: 22px;">0</div>
+          </div>
+        </div>
+
+        <!-- Inner Tabs Section -->
+        <h3 class="heading-lg" style="font-size:16px; margin-bottom:12px;">Log Penugasan Proker</h3>
+        <div class="table-container" style="max-height: 200px; overflow-y: auto; margin-bottom:24px;">
+          <table class="custom-table" style="font-size:12px;">
+            <thead>
+              <tr>
+                <th>Waktu Input</th>
+                <th>Nama Proker</th>
+                <th>Peran</th>
+                <th>Operator</th>
+              </tr>
+            </thead>
+            <tbody id="profile-kegiatan-tbody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="heading-lg" style="font-size:16px; margin-bottom:12px;">Histori Penilaian Bulanan</h3>
+        <div class="table-container" style="max-height: 200px; overflow-y: auto; margin-bottom: 8px;">
+          <table class="custom-table" style="font-size:12px;">
+            <thead>
+              <tr>
+                <th>Waktu Nilai</th>
+                <th>Bulan</th>
+                <th>Nilai</th>
+                <th>Catatan Evaluasi</th>
+                <th>Perekam</th>
+              </tr>
+            </thead>
+            <tbody id="profile-nilai-tbody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; margin-top:20px;">
+          <button class="btn btn-secondary" onclick="closeModal('profile-modal')">Tutup Profil</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: MONTHLY RECAP DETAILS -->
+  <div class="modal-overlay" id="rekap-detail-modal">
+    <div class="modal-box" style="max-width: 720px;">
+      <div class="modal-header">
+        <h3 class="heading-lg" id="rekap-modal-title">Detail Peserta Kegiatan</h3>
+        <button class="modal-close" onclick="closeModal('rekap-detail-modal')">×</button>
+      </div>
+      <div class="modal-body" style="padding-top: 16px;">
+        <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+          <table class="custom-table" style="font-size: 13px;">
+            <thead>
+              <tr>
+                <th>Nama Anggota</th>
+                <th>NIM</th>
+                <th>Divisi</th>
+                <th>Peran (Panitia / Delegasi)</th>
+              </tr>
+            </thead>
+            <tbody id="rekap-detail-tbody">
+              <!-- Loaded by JS -->
+            </tbody>
+          </table>
+        </div>
+        <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
+          <button class="btn btn-secondary" onclick="closeModal('rekap-detail-modal')">Tutup</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript Modules Injection -->
+  <?!= include('JS'); ?>
+</body>
+</html>

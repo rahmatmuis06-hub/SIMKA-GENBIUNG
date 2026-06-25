@@ -1,0 +1,1526 @@
+<script>
+/**
+ * SIMKA GenBI UNG Client Script
+ * File: JS.html
+ * Handles SPA navigation, WhatsApp parsing, fuzzy matching, dynamic rendering, and GAS API calls.
+ */
+
+// Global State
+let anggotaList = [];
+let operatorsList = [];
+let currentOperator = null;
+let parsedWhatsAppList = [];
+
+// Safe Storage Wrapper to prevent iframe SecurityError crashes
+const SafeStorage = {
+  data: {},
+  getItem: function(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      return this.data[key] || null;
+    }
+  },
+  setItem: function(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      this.data[key] = value;
+    }
+  },
+  removeItem: function(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {
+      delete this.data[key];
+    }
+  }
+};
+
+// ----------------------------------------------------
+// INITIALIZATION
+// ----------------------------------------------------
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initApp);
+} else {
+  initApp();
+}
+
+function initApp() {
+  // Check session storage safely
+  const cachedOperator = SafeStorage.getItem("simka_operator");
+  if (cachedOperator) {
+    try {
+      currentOperator = JSON.parse(cachedOperator);
+      showMainApp();
+      loadAllData();
+    } catch(e) {
+      SafeStorage.removeItem("simka_operator");
+      showLoginScreen();
+    }
+  } else {
+    showLoginScreen();
+  }
+}
+
+function showLoginScreen() {
+  document.getElementById("login-screen").style.display = "flex";
+  document.getElementById("app-sidebar").style.display = "none";
+  document.getElementById("app-main").style.display = "none";
+  loadOperatorsDropdown();
+}
+
+function showMainApp() {
+  document.getElementById("login-screen").style.display = "none";
+  document.getElementById("app-sidebar").style.display = "flex";
+  document.getElementById("app-main").style.display = "block";
+  
+  // Render operator info in sidebar
+  document.getElementById("sidebar-op-name").innerText = currentOperator.nama;
+  document.getElementById("sidebar-op-role").innerText = `${currentOperator.jabatan} - ${currentOperator.divisi}`;
+  document.getElementById("sidebar-op-avatar").innerText = currentOperator.nama.charAt(0).toUpperCase();
+  
+  // 1. Hide Admin tab navigation for Kadiv
+  const isKadiv = currentOperator.jabatan === 'Kadiv';
+  document.getElementById("nav-admin").style.display = isKadiv ? "none" : "flex";
+  
+  // 2. Hide Add Member button for Kadiv
+  const btnAdd = document.getElementById("btn-tambah-anggota");
+  if (btnAdd) {
+    btnAdd.style.display = isKadiv ? "none" : "block";
+  }
+  
+  // 3. Configure Active Month Configuration Card (Secretary Only)
+  const isSekretaris = currentOperator.jabatan === 'Sekretaris';
+  const selectMonth = document.getElementById("admin-active-month-select");
+  const btnMonth = document.getElementById("btn-save-active-month");
+  const cardMonth = document.getElementById("admin-grading-activation-card");
+  
+  if (selectMonth && btnMonth && cardMonth) {
+    if (isSekretaris) {
+      selectMonth.disabled = false;
+      btnMonth.disabled = false;
+      cardMonth.style.opacity = "1";
+    } else {
+      selectMonth.disabled = true;
+      btnMonth.disabled = true;
+      cardMonth.style.opacity = "0.6";
+    }
+  }
+  
+  // Load active month config for Admin tab dropdown
+  if (!isKadiv) {
+    loadActiveGradingMonth();
+  }
+  
+  // Show default tab (Dashboard)
+  showTab('dashboard-tab');
+}
+
+// ----------------------------------------------------
+// ROUTER & NAVIGATION
+// ----------------------------------------------------
+function showTab(tabId) {
+  // Security check: Kadiv cannot access Admin tab
+  if (tabId === 'admin-tab' && currentOperator.jabatan === 'Kadiv') {
+    showToast("Akses ditolak: Kadiv tidak diizinkan masuk ke menu Sistem & Audit.", "error");
+    showTab('dashboard-tab');
+    return;
+  }
+
+  // Hide all tabs
+  const tabs = document.querySelectorAll(".tab-panel");
+  tabs.forEach(t => t.style.display = "none");
+  
+  // Show selected tab
+  document.getElementById(tabId).style.display = "block";
+  
+  // Update sidebar active state
+  const navItems = document.querySelectorAll(".nav-item");
+  navItems.forEach(item => {
+    if (item.getAttribute("onclick").includes(tabId)) {
+      item.classList.add("active");
+    } else {
+      item.classList.remove("active");
+    }
+  });
+
+  // Handle specific tab actions on load
+  if (tabId === 'dashboard-tab' && anggotaList.length > 0) {
+    renderDashboard();
+  } else if (tabId === 'members-tab' && anggotaList.length > 0) {
+    renderMembersTable();
+  } else if (tabId === 'input-tab') {
+    initInputTabDates();
+  } else if (tabId === 'grade-tab') {
+    initGradingTab();
+  } else if (tabId === 'recap-tab') {
+    loadMonthlyRecap();
+  } else if (tabId === 'admin-tab') {
+    loadAuditTrail();
+  }
+}
+
+function initInputTabDates() {
+  const todayStr = getTodayDateString();
+  const waDate = document.getElementById("wa-tanggal-input");
+  const manualDate = document.getElementById("manual-tanggal-input");
+  if (waDate && !waDate.value) {
+    waDate.value = todayStr;
+  }
+  if (manualDate && !manualDate.value) {
+    manualDate.value = todayStr;
+  }
+}
+
+function getTodayDateString() {
+  const d = new Date();
+  const year = d.getFullYear();
+  var month = d.getMonth() + 1;
+  var day = d.getDate();
+  if (month < 10) month = '0' + month;
+  if (day < 10) day = '0' + day;
+  return year + '-' + month + '-' + day;
+}
+
+// Toggle mobile sidebar
+function toggleSidebar() {
+  const sidebar = document.getElementById("app-sidebar");
+  sidebar.classList.toggle("mobile-open");
+}
+
+// Hide mobile sidebar when item clicked
+document.querySelectorAll(".nav-item").forEach(item => {
+  item.addEventListener("click", () => {
+    document.getElementById("app-sidebar").classList.remove("mobile-open");
+  });
+});
+
+// ----------------------------------------------------
+// API REQUESTS & STATE SYNC
+// ----------------------------------------------------
+function loadOperatorsDropdown() {
+  if (typeof google === "undefined" || !google.script || !google.script.run) {
+    setTimeout(loadOperatorsDropdown, 50);
+    return;
+  }
+  showLoader();
+  google.script.run
+    .withSuccessHandler(function(list) {
+      hideLoader();
+      operatorsList = list;
+      const select = document.getElementById("login-operator-select");
+      select.innerHTML = '<option value="">-- Pilih Operator --</option>';
+      list.forEach(op => {
+        const option = document.createElement("option");
+        option.value = op.id;
+        option.text = `${op.nama} (${op.jabatan})`;
+        select.appendChild(option);
+      });
+    })
+    .withFailureHandler(function(err) {
+      hideLoader();
+      showToast(err.message, "error");
+    })
+    .getOperatorList();
+}
+
+function loadAllData() {
+  if (typeof google === "undefined" || !google.script || !google.script.run) {
+    setTimeout(loadAllData, 50);
+    return;
+  }
+  showLoader();
+  google.script.run
+    .withSuccessHandler(function(data) {
+      hideLoader();
+      anggotaList = data;
+      renderDashboard();
+      renderMembersTable();
+      populateAnggotaDropdowns();
+    })
+    .withFailureHandler(function(err) {
+      hideLoader();
+      showToast("Gagal memuat data dari spreadsheet: " + err.message, "error");
+    })
+    .getSemuaAnggota();
+}
+
+// Populate standard dropdown list for manual input
+function populateAnggotaDropdowns() {
+  const manualSelect = document.getElementById("manual-anggota-select");
+  if (!manualSelect) return;
+  manualSelect.innerHTML = '<option value="">-- Pilih Anggota --</option>';
+  anggotaList.forEach(a => {
+    const option = document.createElement("option");
+    option.value = a.id;
+    option.text = `${a.nama} (${a.nim || 'Tanpa NIM'})`;
+    manualSelect.appendChild(option);
+  });
+}
+
+// ----------------------------------------------------
+// AUTHENTICATION FLOW
+// ----------------------------------------------------
+function handleLogin(event) {
+  event.preventDefault();
+  const id = document.getElementById("login-operator-select").value;
+  const pin = document.getElementById("login-pin-input").value;
+  
+  if (!id || !pin) {
+    showToast("Pilih operator dan masukkan PIN.", "error");
+    return;
+  }
+  
+  showLoader();
+  google.script.run
+    .withSuccessHandler(function(operator) {
+      hideLoader();
+      currentOperator = operator;
+      SafeStorage.setItem("simka_operator", JSON.stringify(operator));
+      document.getElementById("login-pin-input").value = "";
+      showToast(`Selamat datang, ${operator.nama}!`, "success");
+      showMainApp();
+      loadAllData();
+    })
+    .withFailureHandler(function(err) {
+      hideLoader();
+      showToast(err.message, "error");
+    })
+    .validasiLoginOperator(id, pin);
+}
+
+function handleLogout() {
+  SafeStorage.removeItem("simka_operator");
+  currentOperator = null;
+  showLoginScreen();
+  showToast("Anda telah keluar dari sesi.", "success");
+}
+
+// ----------------------------------------------------
+// DASHBOARD RENDERING
+// ----------------------------------------------------
+function renderDashboard() {
+  // Exemption Rule: Filter data anggota (jabatan harus "Anggota" saja)
+  let listAnggota = anggotaList.filter(a => a.jabatan === "Anggota");
+  
+  // 1. Apply division filtering based on BPH choices or Kadiv division lock
+  if (currentOperator.jabatan === 'Kadiv') {
+    listAnggota = listAnggota.filter(a => a.divisi === currentOperator.divisi);
+    // Force dropdown and hide selector
+    const filterEl = document.getElementById("dash-divisi-filter");
+    if (filterEl) {
+      filterEl.value = currentOperator.divisi;
+    }
+    const containerEl = document.getElementById("dash-filter-container");
+    if (containerEl) {
+      containerEl.style.display = "none";
+    }
+  } else {
+    // BPH user: can use the filter
+    const filterEl = document.getElementById("dash-divisi-filter");
+    const containerEl = document.getElementById("dash-filter-container");
+    if (containerEl) {
+      containerEl.style.display = "block";
+    }
+    if (filterEl) {
+      const selDiv = filterEl.value;
+      if (selDiv && selDiv !== "Semua") {
+        listAnggota = listAnggota.filter(a => a.divisi === selDiv);
+      }
+    }
+  }
+  
+  // 2. Statistics Cards
+  document.getElementById("dash-total-anggota").innerText = listAnggota.length;
+  
+  // Total Kegiatan (sum counts from anggota)
+  let totalKegiatan = 0;
+  listAnggota.forEach(a => {
+    totalKegiatan += (a.panitia || 0) + (a.delegasiKegiatan || 0) + (a.delegasiPeserta || 0);
+  });
+  document.getElementById("dash-total-kegiatan").innerText = totalKegiatan;
+  
+  // Average Keaktifan
+  const avg = listAnggota.length > 0 ? (totalKegiatan / listAnggota.length).toFixed(1) : 0;
+  document.getElementById("dash-avg-kegiatan").innerText = avg;
+
+  // 3. Zona Kontributor Utama (Left Panel) - Top 10 by activity
+  const sortedContributors = [...listAnggota].sort((a, b) => {
+    const totalA = (a.panitia || 0) + (a.delegasiKegiatan || 0) + (a.delegasiPeserta || 0);
+    const totalB = (b.panitia || 0) + (b.delegasiKegiatan || 0) + (b.delegasiPeserta || 0);
+    return totalB - totalA;
+  });
+  
+  const contListEl = document.getElementById("zona-kontributor-list");
+  contListEl.innerHTML = "";
+  if (sortedContributors.length === 0) {
+    contListEl.innerHTML = '<div class="stat-sub">Tidak ada data anggota</div>';
+  } else {
+    // Show top 10
+    const topCount = Math.min(sortedContributors.length, 10);
+    for (let i = 0; i < topCount; i++) {
+      const a = sortedContributors[i];
+      const total = (a.panitia || 0) + (a.delegasiKegiatan || 0) + (a.delegasiPeserta || 0);
+      
+      const item = document.createElement("div");
+      item.className = "member-list-item";
+      item.setAttribute("onclick", `openMemberProfile(${a.id})`);
+      item.innerHTML = `
+        <div class="member-item-info">
+          <span class="member-item-name">${a.nama}</span>
+          <span class="member-item-meta">${a.divisi} • NIM: ${a.nim}</span>
+        </div>
+        <div class="member-item-score">
+          <svg viewBox="0 0 20 20" fill="currentColor" style="width:16px;height:16px;color:var(--primary-soft)">
+            <path fill-rule="evenodd" d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.6 3.102-1.196 4.657c-.21.819.674 1.463 1.397 1.014L10 15.633l4.185 2.501c.723.449 1.607-.195 1.397-1.014l-1.196-4.657 3.6-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401z" clip-rule="evenodd" />
+          </svg>
+          ${total}
+        </div>
+      `;
+      contListEl.appendChild(item);
+    }
+  }
+
+  // 4. Zona Prioritas Penugasan (Right Panel) - sorted by activity ascending
+  // Exclude BPH and Kadiv automatically because we filtered listAnggota
+  const sortedPriorities = [...listAnggota].sort((a, b) => {
+    const totalA = (a.panitia || 0) + (a.delegasiKegiatan || 0) + (a.delegasiPeserta || 0);
+    const totalB = (b.panitia || 0) + (b.delegasiKegiatan || 0) + (b.delegasiPeserta || 0);
+    return totalA - totalB;
+  });
+
+  const prioListEl = document.getElementById("zona-prioritas-list");
+  prioListEl.innerHTML = "";
+  if (sortedPriorities.length === 0) {
+    prioListEl.innerHTML = '<div class="stat-sub">Tidak ada data anggota</div>';
+  } else {
+    // Show top 10 low active
+    const topCount = Math.min(sortedPriorities.length, 10);
+    for (let i = 0; i < topCount; i++) {
+      const a = sortedPriorities[i];
+      const total = (a.panitia || 0) + (a.delegasiKegiatan || 0) + (a.delegasiPeserta || 0);
+      
+      // Determine badge
+      let badge = "";
+      if (a.penerimaanKe == 4 && total === 0) {
+        badge = `<span class="badge badge-danger">Wajib Proker (Penerimaan 4)</span>`;
+      } else {
+        badge = `<span class="badge badge-primary">Penerimaan Ke-${a.penerimaanKe}</span>`;
+      }
+
+      const item = document.createElement("div");
+      item.className = "member-list-item";
+      item.setAttribute("onclick", `openMemberProfile(${a.id})`);
+      item.innerHTML = `
+        <div class="member-item-info">
+          <span class="member-item-name">${a.nama} ${badge}</span>
+          <span class="member-item-meta">${a.divisi} • NIM: ${a.nim}</span>
+        </div>
+        <div class="member-item-score" style="color:var(--ruby)">
+          ${total}
+        </div>
+      `;
+      prioListEl.appendChild(item);
+    }
+  }
+
+  // 5. Render Division Chart (SVG)
+  renderDivisionChart(listAnggota);
+}
+
+function renderDivisionChart(listAnggota) {
+  // Divisions Official List
+  const divisions = [
+    "Pendidikan",
+    "Kominfo",
+    "Lingkungan Hidup",
+    "Kesehatan Masyarakat",
+    "Kewirausahaan",
+    "Potensi Diri"
+  ];
+  
+  // Group activities
+  const devStats = {};
+  divisions.forEach(d => devStats[d] = 0);
+  
+  listAnggota.forEach(a => {
+    const total = (a.panitia || 0) + (a.delegasiKegiatan || 0) + (a.delegasiPeserta || 0);
+    if (devStats[a.divisi] !== undefined) {
+      devStats[a.divisi] += total;
+    }
+  });
+
+  const svg = document.getElementById("bar-chart-container");
+  if (!svg) return;
+  svg.innerHTML = ""; // Clear existing
+  
+  const width = svg.clientWidth || 600;
+  const height = 240;
+  const paddingLeft = 40;
+  const paddingRight = 20;
+  const paddingTop = 30;
+  const paddingBottom = 40;
+  
+  const chartWidth = width - paddingLeft - paddingRight;
+  const chartHeight = height - paddingTop - paddingBottom;
+  
+  // Get max activities
+  let maxAct = 0;
+  divisions.forEach(d => {
+    if (devStats[d] > maxAct) maxAct = devStats[d];
+  });
+  if (maxAct === 0) maxAct = 10; // Prevent divide by zero
+  
+  // Render grid lines
+  const gridLines = 4;
+  for (let g = 0; g <= gridLines; g++) {
+    const yVal = Math.round((maxAct / gridLines) * g);
+    const yPos = height - paddingBottom - (chartHeight / gridLines) * g;
+    
+    // Draw line
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("x1", paddingLeft);
+    line.setAttribute("y1", yPos);
+    line.setAttribute("x2", width - paddingRight);
+    line.setAttribute("y2", yPos);
+    line.setAttribute("stroke", "var(--hairline)");
+    line.setAttribute("stroke-dasharray", "3,3");
+    svg.appendChild(line);
+    
+    // Draw text
+    const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    txt.setAttribute("x", paddingLeft - 10);
+    txt.setAttribute("y", yPos + 4);
+    txt.setAttribute("fill", "var(--ink-mute)");
+    txt.setAttribute("font-size", "10px");
+    txt.setAttribute("text-anchor", "end");
+    txt.textContent = yVal;
+    svg.appendChild(txt);
+  }
+
+  // Draw Bars
+  const barGap = 20;
+  const numBars = divisions.length;
+  const barWidth = (chartWidth - (barGap * (numBars - 1))) / numBars;
+  
+  divisions.forEach((div, idx) => {
+    const count = devStats[div];
+    const barHeight = (count / maxAct) * chartHeight;
+    const xPos = paddingLeft + idx * (barWidth + barGap);
+    const yPos = height - paddingBottom - barHeight;
+    
+    // Draw Bar
+    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    rect.setAttribute("x", xPos);
+    rect.setAttribute("y", yPos);
+    rect.setAttribute("width", barWidth);
+    rect.setAttribute("height", barHeight);
+    rect.setAttribute("class", "chart-bar");
+    
+    // Create gradient effect per bar based on height
+    rect.setAttribute("fill", "url(#bar-gradient)");
+    svg.appendChild(rect);
+    
+    // Draw Count label on top of bar
+    if (count > 0) {
+      const valTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      valTxt.setAttribute("x", xPos + barWidth / 2);
+      valTxt.setAttribute("y", yPos - 8);
+      valTxt.setAttribute("class", "chart-value-text");
+      valTxt.textContent = count;
+      svg.appendChild(valTxt);
+    }
+    
+    // Draw division label at bottom
+    const lblTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    lblTxt.setAttribute("x", xPos + barWidth / 2);
+    lblTxt.setAttribute("y", height - paddingBottom + 20);
+    lblTxt.setAttribute("class", "chart-text");
+    
+    // Wrap text if needed
+    let shortName = div;
+    if (div === "Kesehatan Masyarakat") shortName = "Kesmas";
+    if (div === "Lingkungan Hidup") shortName = "Lh";
+    lblTxt.textContent = shortName;
+    svg.appendChild(lblTxt);
+  });
+}
+
+// ----------------------------------------------------
+// MEMBERS DIRECTORY
+// ----------------------------------------------------
+function renderMembersTable() {
+  const tbody = document.getElementById("members-table-body");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  
+  const searchVal = document.getElementById("member-search").value.toLowerCase();
+  const filterPenerimaan = document.getElementById("filter-penerimaan").value;
+  
+  const divFilterEl = document.getElementById("filter-divisi");
+  let filterDivisi = divFilterEl ? divFilterEl.value : "";
+  
+  // Security division filter override for Kadiv
+  if (currentOperator.jabatan === 'Kadiv') {
+    filterDivisi = currentOperator.divisi;
+    if (divFilterEl) {
+      divFilterEl.value = currentOperator.divisi;
+      divFilterEl.disabled = true;
+      divFilterEl.style.display = "none";
+    }
+  } else {
+    if (divFilterEl) {
+      divFilterEl.disabled = false;
+      divFilterEl.style.display = "inline-block";
+    }
+  }
+  
+  const filterJabatan = document.getElementById("filter-jabatan").value;
+  
+  // Base members list (Kadiv restricted to their division)
+  let baseAnggotaList = anggotaList;
+  if (currentOperator.jabatan === 'Kadiv') {
+    baseAnggotaList = anggotaList.filter(a => a.divisi === currentOperator.divisi);
+  }
+  
+  // Counters for Gelombang
+  let countP1 = 0, countP2 = 0, countP3 = 0, countP4 = 0;
+  
+  const filtered = baseAnggotaList.filter(a => {
+    if (a.penerimaanKe == 1) countP1++;
+    if (a.penerimaanKe == 2) countP2++;
+    if (a.penerimaanKe == 3) countP3++;
+    if (a.penerimaanKe == 4) countP4++;
+    
+    const matchesSearch = a.nama.toLowerCase().includes(searchVal) || a.nim.includes(searchVal);
+    const matchesPenerimaan = filterPenerimaan === "" || a.penerimaanKe == filterPenerimaan;
+    const matchesDivisi = filterDivisi === "" || a.divisi === filterDivisi;
+    const matchesJabatan = filterJabatan === "" || a.jabatan === filterJabatan;
+    
+    return matchesSearch && matchesPenerimaan && matchesDivisi && matchesJabatan;
+  });
+  
+  // Render stats counters
+  document.getElementById("p1-count").innerText = `${countP1} org`;
+  document.getElementById("p2-count").innerText = `${countP2} org`;
+  document.getElementById("p3-count").innerText = `${countP3} org`;
+  document.getElementById("p4-count").innerText = `${countP4} org`;
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--ink-mute)">Tidak ada data anggota cocok.</td></tr>';
+    return;
+  }
+  
+  filtered.forEach(a => {
+    const tr = document.createElement("tr");
+    tr.className = "clickable-row";
+    tr.setAttribute("onclick", `openMemberProfile(${a.id})`);
+    
+    let jabBadge = "";
+    if (a.jabatan === "Ketua") jabBadge = `<span class="badge badge-gold">Ketua</span>`;
+    else if (a.jabatan === "Sekretaris" || a.jabatan === "Bendahara") jabBadge = `<span class="badge badge-primary">${a.jabatan}</span>`;
+    else if (a.jabatan === "Kadiv") jabBadge = `<span class="badge badge-blue">Kadiv</span>`;
+    else jabBadge = `<span class="badge" style="background:var(--bg-hover);color:var(--ink-secondary);border:1px solid var(--hairline)">Anggota</span>`;
+    
+    const total = (a.panitia || 0) + (a.delegasiKegiatan || 0) + (a.delegasiPeserta || 0);
+
+    tr.innerHTML = `
+      <td class="text-tabular">${a.id}</td>
+      <td style="font-weight:500;color:var(--ink)">${a.nama}</td>
+      <td class="text-tabular">${a.nim || '-'}</td>
+      <td>${a.divisi}</td>
+      <td>Gel. ${a.penerimaanKe}</td>
+      <td>${jabBadge}</td>
+      <td class="text-tabular" style="font-weight:500;color:var(--primary-soft)">${total}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function handleAddMember(event) {
+  event.preventDefault();
+  
+  const form = document.getElementById("add-member-form");
+  const anggotaData = {
+    nama: form.nama.value,
+    nim: form.nim.value,
+    divisi: form.divisi.value,
+    penerimaanKe: form.penerimaanKe.value,
+    jabatan: form.jabatan.value,
+    pin: form.pin.value
+  };
+  
+  showLoader();
+  google.script.run
+    .withSuccessHandler(function(res) {
+      hideLoader();
+      closeModal('add-member-modal');
+      form.reset();
+      showToast(`Berhasil mendaftarkan anggota baru: ${res.nama}`, "success");
+      loadAllData(); // Reload master list
+    })
+    .withFailureHandler(function(err) {
+      hideLoader();
+      showToast(err.message, "error");
+    })
+    .daftarAnggotaBaru(anggotaData, currentOperator.nama);
+}
+
+// ----------------------------------------------------
+// MEMBER PROFILE MODAL (READ LOGS)
+// ----------------------------------------------------
+function openMemberProfile(id) {
+  const member = anggotaList.find(a => a.id == id);
+  if (!member) return;
+  
+  document.getElementById("profile-name").innerText = member.nama;
+  document.getElementById("profile-nim").innerText = member.nim || "-";
+  document.getElementById("profile-divisi").innerText = member.divisi;
+  document.getElementById("profile-penerimaan").innerText = `Penerimaan Ke-${member.penerimaanKe}`;
+  
+  // Set badge
+  const badgeEl = document.getElementById("profile-jabatan-badge");
+  badgeEl.className = "badge";
+  if (member.jabatan === "Ketua") {
+    badgeEl.classList.add("badge-gold");
+    badgeEl.innerText = "Ketua";
+  } else if (member.jabatan === "Kadiv") {
+    badgeEl.classList.add("badge-blue");
+    badgeEl.innerText = `Kadiv ${member.divisi}`;
+  } else if (member.jabatan === "Sekretaris" || member.jabatan === "Bendahara") {
+    badgeEl.classList.add("badge-primary");
+    badgeEl.innerText = member.jabatan;
+  } else {
+    badgeEl.style.background = "var(--bg-hover)";
+    badgeEl.style.border = "1px solid var(--hairline)";
+    badgeEl.style.color = "var(--ink-secondary)";
+    badgeEl.innerText = "Anggota Taktis";
+  }
+  
+  // Statistics counts
+  document.getElementById("profile-count-panitia").innerText = member.panitia || 0;
+  document.getElementById("profile-count-del-keg").innerText = member.delegasiKegiatan || 0;
+  document.getElementById("profile-count-del-pes").innerText = member.delegasiPeserta || 0;
+  
+  // Fetch activity log history from backend
+  const tbodyKeg = document.getElementById("profile-kegiatan-tbody");
+  const tbodyNil = document.getElementById("profile-nilai-tbody");
+  tbodyKeg.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ink-mute)">Memuat data...</td></tr>';
+  tbodyNil.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--ink-mute)">Memuat data...</td></tr>';
+  
+  openModal("profile-modal");
+  
+  google.script.run
+    .withSuccessHandler(function(res) {
+      // 1. Render kegiatan logs
+      tbodyKeg.innerHTML = "";
+      if (res.kegiatan.length === 0) {
+        tbodyKeg.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ink-mute)">Tidak ada log penugasan.</td></tr>';
+      } else {
+        res.kegiatan.forEach(k => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td class="text-tabular">${k.timestamp}</td>
+            <td style="font-weight:500;color:var(--ink)">${k.namaProker}</td>
+            <td><span class="badge badge-primary">${k.peran}</span></td>
+            <td>${k.operator}</td>
+          `;
+          tbodyKeg.appendChild(tr);
+        });
+      }
+      
+      // 2. Render penilaian logs
+      tbodyNil.innerHTML = "";
+      if (res.penilaian.length === 0) {
+        tbodyNil.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--ink-mute)">Belum ada penilaian bulanan.</td></tr>';
+      } else {
+        res.penilaian.forEach(n => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td class="text-tabular">${n.timestamp}</td>
+            <td>${n.bulan}</td>
+            <td class="text-tabular" style="font-weight:600;color:var(--primary-soft)">${n.nilai}</td>
+            <td>${n.catatan || '-'}</td>
+            <td>${n.operator}</td>
+          `;
+          tbodyNil.appendChild(tr);
+        });
+      }
+    })
+    .withFailureHandler(function(err) {
+      tbodyKeg.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--ruby)">Gagal: ${err.message}</td></tr>`;
+      tbodyNil.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--ruby)">Gagal: ${err.message}</td></tr>`;
+    })
+    .getRiwayatAnggota(member.id);
+}
+
+// ----------------------------------------------------
+// INPUT PENUGASAN & WHATSAPP PARSER
+// ----------------------------------------------------
+function handleAddPenugasanManual(event) {
+  event.preventDefault();
+  const namaProker = document.getElementById("manual-proker-input").value;
+  const idAnggota = document.getElementById("manual-anggota-select").value;
+  const peran = document.getElementById("manual-peran-select").value;
+  const tanggal = document.getElementById("manual-tanggal-input").value;
+  
+  if (!namaProker || !idAnggota || !peran || !tanggal) {
+    showToast("Isi semua kolom input penugasan.", "error");
+    return;
+  }
+  
+  const member = anggotaList.find(a => a.id == idAnggota);
+  const kegiatanData = [{
+    namaProker: namaProker,
+    idAnggota: idAnggota,
+    namaAnggota: member.nama,
+    peran: peran,
+    tanggal: tanggal
+  }];
+  
+  showLoader();
+  google.script.run
+    .withSuccessHandler(function(res) {
+      hideLoader();
+      document.getElementById("manual-proker-input").value = "";
+      document.getElementById("manual-anggota-select").value = "";
+      showToast("Log penugasan manual berhasil disimpan!", "success");
+      loadAllData();
+    })
+    .withFailureHandler(function(err) {
+      hideLoader();
+      showToast(err.message, "error");
+    })
+    .catatPenugasanBaru(kegiatanData, currentOperator.nama);
+}
+
+// Helper to identify if a token is a role/division indicator label instead of a member's name
+function isRoleLabel(str) {
+  if (!str) return false;
+  var s = str.trim().toLowerCase();
+  var roles = ["ketua", "sekretaris", "sekertaris", "bendahara", "koor", "koordinator", "anggota", "panitia", "bph", "kadiv", "perwakilan", "pj"];
+  if (roles.indexOf(s) > -1) return true;
+  if (s.indexOf("koor ") === 0 || s.indexOf("koordinator ") === 0) return true;
+  if (s.indexOf("ketua ") === 0) return true;
+  if (s.indexOf("sekretaris ") === 0 || s.indexOf("sekertaris ") === 0) return true;
+  if (s.indexOf("bendahara ") === 0) return true;
+  if (s.endsWith(" panitia") || s.endsWith(" divisi") || s.endsWith(" acara") || s.endsWith(" konsumsi") || s.endsWith(" perle") || s.endsWith(" pdd")) return true;
+  return false;
+}
+
+// WhatsApp Text Parser Engine
+function processWhatsAppList() {
+  const rawText = document.getElementById("wa-paste-area").value;
+  if (!rawText.trim()) {
+    showToast("Masukkan salinan daftar WhatsApp terlebih dahulu.", "error");
+    return;
+  }
+  
+  // Clear previous preview list
+  parsedWhatsAppList = [];
+  const listEl = document.getElementById("wa-parsed-list");
+  listEl.innerHTML = "";
+  
+  // Split per line
+  const lines = rawText.split(String.fromCharCode(10));
+  
+  lines.forEach(line => {
+    let cleanLine = line.trim();
+    if (!cleanLine) return; // skip empty lines
+    
+    // Clean WhatsApp numbering/bullet symbols
+    // E.g. "1. Ahmad", "- Budi", "• Charlie", "* Doni"
+    const prefixRegex = new RegExp('^[-0-9+.*• ' + String.fromCharCode(9) + ']+', 'g');
+    cleanLine = cleanLine.replace(prefixRegex, "").trim();
+    
+    // Split name and role/division (like "Ahmad - Panitia", "Budi : Peserta", "Charlie | Pendidikan", "Ketua Panitia : Farel")
+    let parsedName = cleanLine;
+    let parts = cleanLine.split(/[-:|]/);
+    
+    if (parts.length > 1) {
+      var firstPart = parts[0].trim();
+      var secondPart = parts[1].trim();
+      
+      if (isRoleLabel(firstPart)) {
+        // If the first part is a role (e.g. "Ketua Panitia : Farel"), then the name is in the second part
+        if (secondPart.length > 0) {
+          parsedName = secondPart;
+        } else {
+          // If the second part is empty (e.g. "Anggota :"), we skip this line entirely
+          return;
+        }
+      } else {
+        // Standard "Name - Role" format, so the name is the first part
+        parsedName = firstPart;
+      }
+    } else if (parts.length === 1) {
+      parsedName = parts[0].trim();
+    }
+    
+    // Skip if remaining name is too short
+    if (parsedName.length < 2) return;
+    
+    // Check if the parsed name itself is a role label (e.g. if there was a line "Anggota" without colons)
+    if (isRoleLabel(parsedName)) return;
+    
+    // Fuzzy matching against master list
+    const bestMatch = findBestFuzzyMatch(parsedName);
+    
+    parsedWhatsAppList.push({
+      rawName: parsedName,
+      matchedId: bestMatch ? bestMatch.id : ""
+    });
+  });
+  
+  renderWhatsAppPreview();
+}
+
+function findBestFuzzyMatch(inputName) {
+  let highestScore = 0;
+  let bestMatch = null;
+  
+  anggotaList.forEach(a => {
+    const score = getSimilarityScore(inputName, a.nama);
+    if (score > highestScore) {
+      highestScore = score;
+      bestMatch = a;
+    }
+  });
+  
+  // Return best match only if similarity is reasonably high (e.g. > 45%)
+  return highestScore > 45 ? bestMatch : null;
+}
+
+// Levenshtein distance similarity algorithm
+function getLevenshteinDistance(a, b) {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // deletion
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+function getSimilarityScore(a, b) {
+  a = a.toLowerCase().trim();
+  b = b.toLowerCase().trim();
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return 100;
+  const dist = getLevenshteinDistance(a, b);
+  return Math.round((1 - dist / maxLen) * 100);
+}
+
+function renderWhatsAppPreview() {
+  const listEl = document.getElementById("wa-parsed-list");
+  listEl.innerHTML = "";
+  
+  if (parsedWhatsAppList.length === 0) {
+    listEl.innerHTML = '<div style="text-align:center;padding:12px;color:var(--ink-mute)">Tidak ada nama terdeteksi.</div>';
+    document.getElementById("btn-save-wa").disabled = true;
+    return;
+  }
+  
+  parsedWhatsAppList.forEach((item, index) => {
+    const rowDiv = document.createElement("div");
+    rowDiv.className = "preview-row-item";
+    
+    // Label
+    const textSpan = document.createElement("span");
+    textSpan.className = "preview-row-text";
+    textSpan.innerText = item.rawName;
+    rowDiv.appendChild(textSpan);
+    
+    // Group container for select + delete button on the right
+    const actionGroup = document.createElement("div");
+    actionGroup.style.display = "flex";
+    actionGroup.style.alignItems = "center";
+    
+    // Dropdown to select matched member
+    const select = document.createElement("select");
+    select.className = "preview-match-select";
+    select.setAttribute("onchange", `updateWhatsAppMatch(${index}, this.value)`);
+    
+    select.innerHTML = '<option value="">-- Tidak Cocok (Abaikan) --</option>';
+    anggotaList.forEach(a => {
+      const opt = document.createElement("option");
+      opt.value = a.id;
+      opt.text = `${a.nama} (${a.divisi})`;
+      if (a.id == item.matchedId) {
+        opt.selected = true;
+      }
+      select.appendChild(opt);
+    });
+    actionGroup.appendChild(select);
+    
+    // Delete Button
+    const deleteBtn = document.createElement("button");
+    deleteBtn.setAttribute("type", "button");
+    deleteBtn.setAttribute("onclick", `removeWhatsAppRow(${index})`);
+    deleteBtn.style.padding = "6px";
+    deleteBtn.style.background = "rgba(234, 34, 97, 0.1)";
+    deleteBtn.style.color = "var(--ruby)";
+    deleteBtn.style.border = "none";
+    deleteBtn.style.borderRadius = "6px";
+    deleteBtn.style.cursor = "pointer";
+    deleteBtn.style.display = "flex";
+    deleteBtn.style.alignItems = "center";
+    deleteBtn.style.justifyContent = "center";
+    deleteBtn.style.transition = "all 0.2s ease";
+    deleteBtn.style.marginLeft = "8px";
+    deleteBtn.style.height = "28px";
+    deleteBtn.style.width = "28px";
+    
+    deleteBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:14px;height:14px;">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+      </svg>
+    `;
+    
+    deleteBtn.onmouseover = function() {
+      deleteBtn.style.background = "var(--ruby)";
+      deleteBtn.style.color = "#ffffff";
+    };
+    deleteBtn.onmouseout = function() {
+      deleteBtn.style.background = "rgba(234, 34, 97, 0.1)";
+      deleteBtn.style.color = "var(--ruby)";
+    };
+    
+    actionGroup.appendChild(deleteBtn);
+    rowDiv.appendChild(actionGroup);
+    listEl.appendChild(rowDiv);
+  });
+  
+  document.getElementById("btn-save-wa").disabled = false;
+}
+
+function updateWhatsAppMatch(index, value) {
+  parsedWhatsAppList[index].matchedId = value;
+}
+
+function removeWhatsAppRow(index) {
+  parsedWhatsAppList.splice(index, 1);
+  renderWhatsAppPreview();
+}
+
+function saveWhatsAppList() {
+  const namaProker = document.getElementById("wa-proker-input").value;
+  const peran = document.getElementById("wa-peran-select").value;
+  const tanggal = document.getElementById("wa-tanggal-input").value;
+  
+  if (!namaProker || !peran || !tanggal) {
+    showToast("Isi nama proker, jenis peran, dan tanggal terlebih dahulu.", "error");
+    return;
+  }
+  
+  // Gather valid inputs
+  const kegiatanData = [];
+  parsedWhatsAppList.forEach(item => {
+    if (item.matchedId) {
+      const member = anggotaList.find(a => a.id == item.matchedId);
+      kegiatanData.push({
+        namaProker: namaProker,
+        idAnggota: item.matchedId,
+        namaAnggota: member.nama,
+        peran: peran,
+        tanggal: tanggal
+      });
+    }
+  });
+  
+  if (kegiatanData.length === 0) {
+    showToast("Tidak ada kecocokan anggota untuk disimpan.", "error");
+    return;
+  }
+  
+  showLoader();
+  google.script.run
+    .withSuccessHandler(function(res) {
+      hideLoader();
+      document.getElementById("wa-paste-area").value = "";
+      document.getElementById("wa-proker-input").value = "";
+      document.getElementById("wa-parsed-list").innerHTML = "";
+      parsedWhatsAppList = [];
+      document.getElementById("btn-save-wa").disabled = true;
+      showToast(`Berhasil menyimpan ${res.count} log penugasan WhatsApp!`, "success");
+      loadAllData();
+    })
+    .withFailureHandler(function(err) {
+      hideLoader();
+      showToast(err.message, "error");
+    })
+    .catatPenugasanBaru(kegiatanData, currentOperator.nama);
+}
+
+// ----------------------------------------------------
+// PENILAIAN BULANAN (GRADING SYSTEM)
+// ----------------------------------------------------
+function initGradingTab() {
+  const headerText = document.getElementById("grading-role-alert");
+  const formBox = document.getElementById("grading-form-box");
+  const formList = document.getElementById("grading-list-container");
+  
+  formList.innerHTML = "";
+  
+  showLoader();
+  google.script.run
+    .withSuccessHandler(function(activeMonth) {
+      hideLoader();
+      document.getElementById("grading-month-input").value = activeMonth;
+      
+      let validRecipients = [];
+      
+      // Frontend authorization rules
+      if (currentOperator.jabatan === "Ketua") {
+        headerText.innerHTML = `<span class="badge badge-gold">Otorisasi: Ketua</span> Anda berhak mengisi penilaian untuk **Sekretaris, Bendahara, dan 6 Kepala Divisi** pada bulan **${activeMonth}**.`;
+        
+        validRecipients = anggotaList.filter(a => {
+          return a.jabatan === "Sekretaris" || a.jabatan === "Bendahara" || a.jabatan === "Kadiv";
+        });
+        
+      } else if (currentOperator.jabatan === "Kadiv") {
+        headerText.innerHTML = `<span class="badge badge-blue">Otorisasi: Kadiv</span> Anda berhak mengisi penilaian bulanan anggota taktis divisi **${currentOperator.divisi}** pada bulan **${activeMonth}**.`;
+        
+        validRecipients = anggotaList.filter(a => {
+          return a.jabatan === "Anggota" && a.divisi === currentOperator.divisi;
+        });
+      } else {
+        // Sekretaris/Bendahara BPH cannot evaluate
+        headerText.innerHTML = `<span class="badge badge-danger">Akses Ditolak</span> Jabatan Anda (${currentOperator.jabatan}) tidak memiliki wewenang penilaian. Hanya Ketua dan Kadiv yang diizinkan.`;
+        formBox.style.opacity = "0.5";
+        formBox.querySelectorAll("input, button, select").forEach(el => el.disabled = true);
+        return;
+      }
+      
+      // Enable forms if authorized
+      formBox.style.opacity = "1";
+      formBox.querySelectorAll("input, button, select").forEach(el => el.disabled = false);
+      // Ensure month input remains readonly
+      document.getElementById("grading-month-input").disabled = false;
+      document.getElementById("grading-month-input").readOnly = true;
+      
+      if (validRecipients.length === 0) {
+        formList.innerHTML = '<div style="color:var(--ink-mute);padding:16px;">Tidak ada anggota yang dapat dinilai saat ini.</div>';
+        return;
+      }
+      
+      // Render grading cards for each recipient (with 1-5 scale)
+      validRecipients.forEach(r => {
+        const card = document.createElement("div");
+        card.style.background = "var(--bg-hover)";
+        card.style.border = "1px solid var(--hairline)";
+        card.style.borderRadius = "8px";
+        card.style.padding = "16px 20px";
+        card.style.marginBottom = "16px";
+        
+        card.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+            <div>
+              <span style="font-weight:500;font-size:15px;color:var(--ink)">${r.nama}</span>
+              <span style="font-size:12px;color:var(--ink-mute);margin-left:8px;">${r.jabatan} • Gel. ${r.penerimaanKe}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:12px;color:var(--ink-mute)">Skala Kinerja (1-5):</span>
+              <span id="grade-val-lbl-${r.id}" style="font-size:18px;font-weight:600;color:var(--primary-soft);font-feature-settings:'tnum'">3</span>
+            </div>
+          </div>
+          
+          <div class="form-group" style="margin-bottom:12px;">
+            <input type="range" class="form-control-range" min="1" max="5" value="3" 
+              style="width:100%;accent-color:var(--primary)" 
+              oninput="document.getElementById('grade-val-lbl-${r.id}').innerText = this.value; document.getElementById('grade-val-input-${r.id}').value = this.value;">
+            <input type="hidden" id="grade-val-input-${r.id}" value="3">
+          </div>
+          
+          <div class="form-group" style="margin-bottom:0;">
+            <input type="text" class="form-control" id="grade-catatan-input-${r.id}" placeholder="Tulis catatan evaluasi singkat..." style="font-size:13px;">
+          </div>
+        `;
+        card.setAttribute("data-recipient-id", r.id);
+        formList.appendChild(card);
+      });
+    })
+    .withFailureHandler(function(err) {
+      hideLoader();
+      showToast("Gagal memuat bulan penilaian aktif: " + err.message, "error");
+    })
+    .getActiveGradingMonth();
+}
+
+function savePenilaianBulanan(event) {
+  event.preventDefault();
+  
+  const bulan = document.getElementById("grading-month-input").value;
+  if (!bulan) {
+    showToast("Isi nama bulan penilaian.", "error");
+    return;
+  }
+  
+  const cards = document.getElementById("grading-list-container").querySelectorAll("[data-recipient-id]");
+  const penilaianData = [];
+  
+  cards.forEach(card => {
+    const idPenerima = card.getAttribute("data-recipient-id");
+    const nilai = card.querySelector(`#grade-val-input-${idPenerima}`).value;
+    const catatan = card.querySelector(`#grade-catatan-input-${idPenerima}`).value;
+    
+    penilaianData.push({
+      idPenilai: currentOperator.id,
+      idPenerima: idPenerima,
+      nilai: nilai,
+      catatan: catatan,
+      bulan: bulan
+    });
+  });
+  
+  if (penilaianData.length === 0) {
+    showToast("Tidak ada data penilaian untuk disimpan.", "error");
+    return;
+  }
+  
+  showLoader();
+  google.script.run
+    .withSuccessHandler(function(res) {
+      hideLoader();
+      showToast(`Berhasil menyimpan ${res.count} data penilaian bulanan!`, "success");
+      loadAllData(); // Reload master
+    })
+    .withFailureHandler(function(err) {
+      hideLoader();
+      showToast(err.message, "error");
+    })
+    .simpanPenilaianBulanan(penilaianData, currentOperator.nama);
+}
+
+// ----------------------------------------------------
+// SYSTEM SETTINGS & ADMIN FUNCTIONS
+// ----------------------------------------------------
+function executeManualBackup() {
+  showLoader();
+  google.script.run
+    .withSuccessHandler(function(res) {
+      hideLoader();
+      showToast(`Backup berhasil! File: ${res.name}`, "success");
+      // Load settings update
+      loadAuditTrail();
+    })
+    .withFailureHandler(function(err) {
+      hideLoader();
+      showToast("Backup gagal: " + err.message, "error");
+    })
+    .backupDatabaseOtomatis();
+}
+
+function executeImportGenbiData() {
+  var urlOrId = document.getElementById("import-spreadsheet-url").value.trim();
+  var confirmMsg = "Apakah Anda yakin ingin mengimpor data pengurus terbaru? Seluruh data anggota yang lama di sheet 'Anggota' akan dibersihkan dan diganti dengan data baru.";
+  var newLine = String.fromCharCode(10);
+  if (urlOrId) {
+    confirmMsg += newLine + newLine + "Sumber kustom: " + urlOrId;
+  } else {
+    confirmMsg += newLine + newLine + "Sumber default: Spreadsheet Penerimaan Baru";
+  }
+  
+  if (confirm(confirmMsg)) {
+    showLoader();
+    google.script.run
+      .withSuccessHandler(function(msg) {
+        hideLoader();
+        showToast(msg, "success");
+        document.getElementById("import-spreadsheet-url").value = ""; // Clear input on success
+        loadAllData(); // Reload data on UI
+      })
+      .withFailureHandler(function(err) {
+        hideLoader();
+        showToast(err.message, "error");
+      })
+      .importGenbiDataFromSheet(urlOrId);
+  }
+}
+
+function loadAuditTrail() {
+  const kegTbody = document.getElementById("audit-kegiatan-tbody");
+  const penTbody = document.getElementById("audit-penilaian-tbody");
+  
+  kegTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink-mute)">Memuat log...</td></tr>';
+  penTbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--ink-mute)">Memuat log...</td></tr>';
+  
+  google.script.run
+    .withSuccessHandler(function(list) {
+      kegTbody.innerHTML = "";
+      if (list.length === 0) {
+        kegTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink-mute)">Log penugasan kosong.</td></tr>';
+      } else {
+        list.forEach(k => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td class="text-tabular">${k.timestamp}</td>
+            <td style="font-weight:500;color:var(--ink)">${k.namaProker}</td>
+            <td class="text-tabular">${k.idAnggota}</td>
+            <td>${k.namaAnggota}</td>
+            <td><span class="badge badge-primary">${k.peran}</span></td>
+            <td style="font-weight:500;color:var(--primary-soft)">${k.operator}</td>
+          `;
+          kegTbody.appendChild(tr);
+        });
+      }
+    })
+    .getLogsKegiatanLimit(15);
+    
+  google.script.run
+    .withSuccessHandler(function(list) {
+      penTbody.innerHTML = "";
+      if (list.length === 0) {
+        penTbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--ink-mute)">Log penilaian kosong.</td></tr>';
+      } else {
+        list.forEach(n => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td class="text-tabular">${n.timestamp}</td>
+            <td>${n.bulan}</td>
+            <td class="text-tabular">${n.idPenerima}</td>
+            <td>${n.namaPenerima}</td>
+            <td>${n.jabatanPenerima}</td>
+            <td class="text-tabular" style="font-weight:600;color:var(--primary-soft)">${n.nilai}</td>
+            <td>${n.catatan || '-'}</td>
+            <td class="text-tabular">${n.idPenilai}</td>
+            <td style="font-weight:500;color:var(--primary-soft)">${n.operator}</td>
+          `;
+          penTbody.appendChild(tr);
+        });
+      }
+    })
+    .getLogsPenilaianLimit(15);
+}
+
+function loadMonthlyRecap() {
+  const selectEl = document.getElementById("recap-month-filter");
+  if (!selectEl) return;
+  selectEl.innerHTML = '<option value="">Memuat bulan...</option>';
+  
+  const tbody = document.getElementById("recap-tbody");
+  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ink-mute)">Memuat rekap...</td></tr>';
+  
+  google.script.run
+    .withSuccessHandler(function(months) {
+      selectEl.innerHTML = "";
+      if (months.length === 0) {
+        selectEl.innerHTML = '<option value="">Belum ada log kegiatan</option>';
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ink-mute)">Tidak ada data log kegiatan.</td></tr>';
+        return;
+      }
+      
+      // Add Option "Semua Bulan"
+      const optAll = document.createElement("option");
+      optAll.value = "Semua";
+      optAll.text = "Semua Bulan";
+      selectEl.appendChild(optAll);
+      
+      // Populate other months
+      months.forEach(m => {
+        const opt = document.createElement("option");
+        opt.value = m;
+        opt.text = m;
+        selectEl.appendChild(opt);
+      });
+      
+      // Select the first month by default (latest month)
+      selectEl.value = months[0];
+      loadActivitiesForMonth(months[0]);
+    })
+    .withFailureHandler(function(err) {
+      selectEl.innerHTML = '<option value="">Gagal memuat</option>';
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--ruby)">Gagal memuat rekap: ${err.message}</td></tr>`;
+    })
+    .getUniqueRecapMonths();
+}
+
+function onRecapMonthFilterChange() {
+  const selectEl = document.getElementById("recap-month-filter");
+  if (!selectEl) return;
+  loadActivitiesForMonth(selectEl.value);
+}
+
+function loadActivitiesForMonth(monthKey) {
+  const tbody = document.getElementById("recap-tbody");
+  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ink-mute)">Memuat program kerja...</td></tr>';
+  
+  google.script.run
+    .withSuccessHandler(function(list) {
+      tbody.innerHTML = "";
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ink-mute)">Tidak ada kegiatan pada bulan ini.</td></tr>';
+        return;
+      }
+      
+      list.forEach(r => {
+        const tr = document.createElement("tr");
+        tr.className = "clickable-row";
+        tr.setAttribute("onclick", `openProkerDetail('${r.namaProker}')`);
+        tr.innerHTML = `
+          <td style="font-weight:600;color:var(--ink);">${r.namaProker}</td>
+          <td class="text-tabular" style="text-align:center;font-weight:500;">${r.monthKey}</td>
+          <td class="text-tabular" style="text-align:center;font-weight:500;color:var(--primary-soft);">${r.participantCount} orang</td>
+          <td style="font-size:13px;color:var(--ink-secondary);">${r.operator || '-'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    })
+    .withFailureHandler(function(err) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--ruby)">Gagal memuat kegiatan: ${err.message}</td></tr>`;
+    })
+    .getActivitiesByMonth(monthKey);
+}
+
+// ----------------------------------------------------
+// UI HELPERS (MODALS, TOASTS, LOADERS)
+// ----------------------------------------------------
+function openModal(modalId) {
+  document.getElementById(modalId).classList.add("active");
+}
+
+function closeModal(modalId) {
+  document.getElementById(modalId).classList.remove("active");
+}
+
+function showLoader() {
+  document.getElementById("app-loader").style.display = "block";
+}
+
+function hideLoader() {
+  document.getElementById("app-loader").style.display = "none";
+}
+
+function showToast(message, type = "info") {
+  const container = document.getElementById("toast-container");
+  if (!container) return;
+  
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  
+  let icon = `
+    <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:20px;height:20px;color:var(--primary-soft)">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 111.085 1.085l-.041.02H11.25v2.25h-.75v-2.25h-.75v-.75h1.5v-.75zM12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25z" />
+    </svg>
+  `; // info
+  
+  if (type === "success") {
+    icon = `
+      <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:20px;height:20px;color:#32cd32">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    `;
+  } else if (type === "error") {
+    icon = `
+      <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:20px;height:20px;color:var(--ruby)">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+      </svg>
+    `;
+  }
+  
+  toast.innerHTML = `
+    ${icon}
+    <span>${message}</span>
+  `;
+  
+  container.appendChild(toast);
+  
+  // Animate slide-in
+  setTimeout(() => {
+    toast.classList.add("active");
+  }, 10);
+  
+  // Auto remove after 4 seconds
+  setTimeout(() => {
+    toast.classList.remove("active");
+    setTimeout(() => {
+      toast.remove();
+    }, 300);
+  }, 4000);
+}
+
+// ----------------------------------------------------
+// DYNAMIC ACTIVE MONTH CONTROLS (SEKRETARIS)
+// ----------------------------------------------------
+function saveActiveGradingMonth() {
+  const selectMonth = document.getElementById("admin-active-month-select");
+  if (!selectMonth) return;
+  const monthVal = selectMonth.value;
+  
+  showLoader();
+  google.script.run
+    .withSuccessHandler(function(msg) {
+      hideLoader();
+      showToast(msg, "success");
+    })
+    .withFailureHandler(function(err) {
+      hideLoader();
+      showToast(err.message, "error");
+    })
+    .saveActiveGradingMonth(monthVal, currentOperator.jabatan);
+}
+
+function loadActiveGradingMonth() {
+  google.script.run
+    .withSuccessHandler(function(month) {
+      const selectMonth = document.getElementById("admin-active-month-select");
+      if (selectMonth) selectMonth.value = month;
+    })
+    .withFailureHandler(function(err) {
+      console.error("Gagal memuat bulan penilaian: " + err.message);
+    })
+    .getActiveGradingMonth();
+}
+
+// ----------------------------------------------------
+// MONTHLY RECAP POPUP LIST
+// ----------------------------------------------------
+function openProkerDetail(prokerName) {
+  document.getElementById("rekap-modal-title").innerText = `Daftar Panitia / Peserta - ${prokerName}`;
+  const tbody = document.getElementById("rekap-detail-tbody");
+  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ink-mute)">Memuat data...</td></tr>';
+  openModal('rekap-detail-modal');
+  
+  google.script.run
+    .withSuccessHandler(function(list) {
+      tbody.innerHTML = "";
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ink-mute)">Tidak ada panitia/peserta tercatat untuk kegiatan ini.</td></tr>';
+      } else {
+        list.forEach(p => {
+          const tr = document.createElement("tr");
+          
+          let roleClass = "badge-primary";
+          if (p.peran === "Delegasi Kegiatan") roleClass = "badge-blue";
+          if (p.peran === "Delegasi Peserta") roleClass = "badge-green";
+          
+          tr.innerHTML = `
+            <td style="font-weight:600;color:var(--ink);">${p.nama}</td>
+            <td class="text-tabular">${p.nim || '-'}</td>
+            <td><span class="badge" style="background:var(--bg-hover);color:var(--ink-secondary);border:1px solid var(--hairline)">${p.divisi}</span></td>
+            <td><span class="badge ${roleClass}" style="font-size: 11px; padding: 2px 8px;">${p.peran}</span></td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+    })
+    .withFailureHandler(function(err) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--ruby)">Gagal memuat detail panitia: ${err.message}</td></tr>`;
+    })
+    .getParticipantsByProker(prokerName);
+}
+</script>
