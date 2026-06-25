@@ -1445,9 +1445,9 @@ function loadActivitiesForMonth(monthKey) {
         tr.setAttribute("onclick", `openProkerDetail('${r.namaProker}')`);
         tr.innerHTML = `
           <td style="font-weight:600;color:var(--ink);">${r.namaProker}</td>
-          <td class="text-tabular" style="text-align:center;font-weight:500;">${r.monthKey}</td>
-          <td class="text-tabular" style="text-align:center;font-weight:500;color:var(--primary-soft);">${r.participantCount} orang</td>
-          <td style="font-size:13px;color:var(--ink-secondary);">${r.operator || '-'}</td>
+          <td class="text-tabular text-nowrap" style="text-align:center;font-weight:500;">${r.monthKey}</td>
+          <td class="text-tabular text-nowrap" style="text-align:center;font-weight:500;color:var(--primary-soft);">${r.participantCount} orang</td>
+          <td class="text-nowrap" style="font-size:13px;color:var(--ink-secondary);">${r.operator || '-'}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -1661,17 +1661,17 @@ function renderKasTable(list) {
     const statusText = isLunas ? "✅ Lunas" : "❌ Belum Lunas";
     
     tr.innerHTML = `
-      <td>${index + 1}</td>
+      <td class="text-nowrap">${index + 1}</td>
       <td style="font-weight: 500;">${a.nama}</td>
-      <td style="font-family: monospace;">${a.nim}</td>
-      <td>${a.divisi}</td>
-      <td>Gel. ${a.penerimaanKe}</td>
-      <td>
+      <td class="text-tabular text-nowrap">${a.nim}</td>
+      <td class="text-nowrap">${a.divisi}</td>
+      <td class="text-nowrap">Gel. ${a.penerimaanKe}</td>
+      <td class="text-nowrap">
         <button class="kas-toggle-btn ${statusClass}" onclick="handleToggleKas('${a.nim}', '${semester}', '${tahun}')">
           ${statusText}
         </button>
       </td>
-      <td style="font-size: 13px; color: var(--ink-secondary); font-family: monospace;">
+      <td class="text-tabular text-nowrap" style="font-size: 13px; color: var(--ink-secondary);">
         ${a.tanggalBayar || "-"}
       </td>
     `;
@@ -1799,24 +1799,24 @@ function renderRekeningTable() {
     tr.dataset.search = `${a.nama.toLowerCase()} ${a.nim}`;
     
     tr.innerHTML = `
-      <td>${index + 1}</td>
+      <td class="text-nowrap">${index + 1}</td>
       <td style="font-weight: 500;">${a.nama}</td>
-      <td style="font-family: monospace;">${a.nim}</td>
-      <td>${a.divisi}</td>
-      <td>Gel. ${a.penerimaanKe}</td>
-      <td>
-        <span class="rekening-val" id="rek-span-${a.nim}" onclick="makeRekeningEditable('${a.nim}')">
+      <td class="text-tabular text-nowrap">${a.nim}</td>
+      <td class="text-nowrap">${a.divisi}</td>
+      <td class="text-nowrap">Gel. ${a.penerimaanKe}</td>
+      <td class="text-nowrap">
+        <span class="rekening-val text-nowrap" id="rek-span-${a.nim}" onclick="makeRekeningEditable('${a.nim}')">
           ${a.rekeningBNI || 'Klik untuk mengisi'}
         </span>
         <div id="rek-edit-container-${a.nim}" style="display: none;">
-          <input type="text" class="form-control rekening-inline-edit" id="rek-input-${a.nim}" 
+          <input type="text" class="form-control rekening-inline-edit text-nowrap" id="rek-input-${a.nim}" 
             value="${a.rekeningBNI || ''}" 
             onblur="saveRekeningInline('${a.nim}')" 
             onkeydown="handleRekeningKeydown(event, '${a.nim}')">
         </div>
       </td>
-      <td>
-        <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 11px; height: auto;" onclick="makeRekeningEditable('${a.nim}')">
+      <td class="text-nowrap">
+        <button class="btn btn-secondary text-nowrap" style="padding: 2px 8px; font-size: 11px; height: auto;" onclick="makeRekeningEditable('${a.nim}')">
           Edit
         </button>
       </td>
