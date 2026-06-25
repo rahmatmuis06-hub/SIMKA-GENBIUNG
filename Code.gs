@@ -1069,14 +1069,14 @@ function syncRekeningFromSourceSheet(urlOrId) {
       var cellVal = cleanHeaderStr(row[c]);
       if (!cellVal) continue;
       
-      if (cellVal === "nim" || cellVal.indexOf("induk") > -1 || cellVal.indexOf("nim") > -1) {
+      if (cellVal.indexOf("rekening") > -1 || cellVal.indexOf("rek") > -1 || cellVal.indexOf("bni") > -1) {
+        tempIndices.rekening = c;
+        score += 3;
+      } else if (cellVal === "nim" || cellVal.indexOf("induk") > -1 || cellVal.indexOf("nim") > -1) {
         tempIndices.nim = c;
         score += 3;
       } else if (cellVal.indexOf("nama") > -1) {
         tempIndices.nama = c;
-        score += 3;
-      } else if (cellVal.indexOf("rekening") > -1 || cellVal.indexOf("rek") > -1 || cellVal.indexOf("bni") > -1) {
-        tempIndices.rekening = c;
         score += 3;
       }
     }
