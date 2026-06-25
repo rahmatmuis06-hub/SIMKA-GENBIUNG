@@ -38,14 +38,15 @@ function initializeSpreadsheet() {
       "panitia",
       "delegasiKegiatan",
       "delegasiPeserta",
-      "pin"
+      "pin",
+      "rekeningBNI"
     ]);
     
     // Add default admin/operators for testing
-    sheetAnggota.appendRow([1, "Ketua Komisariat", "11111", "BPH", 1, "Ketua", 0, 0, 0, "1234"]);
-    sheetAnggota.appendRow([2, "Sekretaris Komisariat", "22222", "BPH", 1, "Sekretaris", 0, 0, 0, "5678"]);
-    sheetAnggota.appendRow([3, "Bendahara Komisariat", "33333", "BPH", 1, "Bendahara", 0, 0, 0, "9999"]);
-    sheetAnggota.appendRow([4, "Kadiv Pendidikan", "44444", "Pendidikan", 1, "Kadiv", 0, 0, 0, "1111"]);
+    sheetAnggota.appendRow([1, "Ketua Komisariat", "11111", "BPH", 1, "Ketua", 0, 0, 0, "1234", ""]);
+    sheetAnggota.appendRow([2, "Sekretaris Komisariat", "22222", "BPH", 1, "Sekretaris", 0, 0, 0, "5678", ""]);
+    sheetAnggota.appendRow([3, "Bendahara Komisariat", "33333", "BPH", 1, "Bendahara", 0, 0, 0, "9999", ""]);
+    sheetAnggota.appendRow([4, "Kadiv Pendidikan", "44444", "Pendidikan", 1, "Kadiv", 0, 0, 0, "1111", ""]);
   }
   
   // Sheet 2: Kegiatan_Log
@@ -85,6 +86,8 @@ function initializeSpreadsheet() {
     ss.deleteSheet(defaultSheet);
   }
   
+  initializeNewSheets();
+  
   return "Database SIMKA GenBI UNG berhasil diinisialisasi! Data default operator ditambahkan (PIN Ketua: 1234, Sekretaris: 5678).";
 }
 
@@ -92,25 +95,71 @@ function initializeSpreadsheet() {
 // GETTERS (READ OPERATIONS - NO LOCK REQUIRED)
 // ----------------------------------------------------
 function getSemuaAnggota() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Anggota");
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("Anggota");
   if (!sheet) return [];
   var data = sheet.getDataRange().getValues();
   if (data.length <= 1) return [];
   
+  var sheetKegiatan = ss.getSheetByName("Kegiatan");
+  var sheetPartisipasi = ss.getSheetByName("Partisipasi_Kegiatan");
+  
+  var useDynamic = false;
+  var keaktifanMap = {};
+  
+  if (sheetKegiatan && sheetPartisipasi) {
+    useDynamic = true;
+    var kegiatanMap = {};
+    var kData = sheetKegiatan.getDataRange().getValues();
+    for (var k = 1; k < kData.length; k++) {
+      kegiatanMap[kData[k][0]] = kData[k][3]; // ID -> Kategori
+    }
+    
+    var pData = sheetPartisipasi.getDataRange().getValues();
+    for (var p = 1; p < pData.length; p++) {
+      var pNim = String(pData[p][1]);
+      var kId = pData[p][2];
+      var kat = kegiatanMap[kId] || "Kepanitiaan";
+      
+      if (!keaktifanMap[pNim]) {
+        keaktifanMap[pNim] = { panitia: 0, delegasiKegiatan: 0, delegasiPeserta: 0 };
+      }
+      if (kat === "Kepanitiaan") {
+        keaktifanMap[pNim].panitia++;
+      } else if (kat === "Delegasi Kegiatan") {
+        keaktifanMap[pNim].delegasiKegiatan++;
+      } else if (kat === "Delegasi Peserta") {
+        keaktifanMap[pNim].delegasiPeserta++;
+      }
+    }
+  }
+  
   var list = [];
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
+    var nim = String(row[2]);
+    var panitiaVal = row[6] || 0;
+    var delKegVal = row[7] || 0;
+    var delPesVal = row[8] || 0;
+    
+    if (useDynamic) {
+      var dyn = keaktifanMap[nim] || { panitia: 0, delegasiKegiatan: 0, delegasiPeserta: 0 };
+      panitiaVal = dyn.panitia;
+      delKegVal = dyn.delegasiKegiatan;
+      delPesVal = dyn.delegasiPeserta;
+    }
+    
     list.push({
       id: row[0],
       nama: row[1],
-      nim: String(row[2]),
+      nim: nim,
       divisi: row[3],
       penerimaanKe: row[4],
       jabatan: row[5],
-      panitia: row[6] || 0,
-      delegasiKegiatan: row[7] || 0,
-      delegasiPeserta: row[8] || 0
-      // Omit PIN for frontend safety
+      panitia: panitiaVal,
+      delegasiKegiatan: delKegVal,
+      delegasiPeserta: delPesVal,
+      rekeningBNI: row[10] || ""
     });
   }
   return list;
@@ -294,7 +343,8 @@ function daftarAnggotaBaru(anggotaData, operatorName) {
       0, // panitia default
       0, // delegasiKegiatan default
       0, // delegasiPeserta default
-      pin
+      pin,
+      anggotaData.rekeningBNI ? String(anggotaData.rekeningBNI).trim() : ""
     ]);
     
     return { success: true, id: newId, nama: nama };
@@ -838,14 +888,15 @@ function importGenbiDataFromSheet(urlOrId) {
         0, // panitia
         0, // delegasiKegiatan
         0, // delegasiPeserta
-        pin
+        pin,
+        ""
       ]);
       importedCount++;
     }
     
     // Batch write to sheet
     if (rowsToAppend.length > 0) {
-      var range = sheetAnggota.getRange(2, 1, rowsToAppend.length, 10);
+      var range = sheetAnggota.getRange(2, 1, rowsToAppend.length, 11);
       range.setValues(rowsToAppend);
     }
   } finally {
@@ -1177,4 +1228,519 @@ function getParticipantsByProker(prokerName) {
   }
   
   return participants;
+}
+
+function initializeNewSheets() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // 1. Ensure Anggota has column K (rekeningBNI)
+  var sheetAnggota = ss.getSheetByName("Anggota");
+  if (sheetAnggota) {
+    var headers = sheetAnggota.getRange(1, 1, 1, Math.max(1, sheetAnggota.getLastColumn())).getValues()[0];
+    if (headers.indexOf("rekeningBNI") === -1) {
+      sheetAnggota.getRange(1, 11).setValue("rekeningBNI");
+    }
+  } else {
+    initializeSpreadsheet();
+  }
+  
+  // 2. Sheet Kegiatan
+  var sheetKegiatan = ss.getSheetByName("Kegiatan");
+  if (!sheetKegiatan) {
+    sheetKegiatan = ss.insertSheet("Kegiatan");
+    sheetKegiatan.appendRow([
+      "ID_Kegiatan",
+      "Nama_Kegiatan",
+      "Tanggal_Kegiatan",
+      "Kategori"
+    ]);
+  }
+  
+  // 3. Sheet Partisipasi_Kegiatan
+  var sheetPartisipasi = ss.getSheetByName("Partisipasi_Kegiatan");
+  if (!sheetPartisipasi) {
+    sheetPartisipasi = ss.insertSheet("Partisipasi_Kegiatan");
+    sheetPartisipasi.appendRow([
+      "ID_Partisipasi",
+      "NIM_Anggota",
+      "ID_Kegiatan"
+    ]);
+  }
+  
+  // 4. Sheet Kas
+  var sheetKas = ss.getSheetByName("Kas");
+  if (!sheetKas) {
+    sheetKas = ss.insertSheet("Kas");
+    sheetKas.appendRow([
+      "ID_Kas",
+      "NIM_Anggota",
+      "Semester",
+      "Tahun_Akademik",
+      "Status",
+      "Tanggal_Bayar"
+    ]);
+  }
+  
+  return "Inisialisasi tabel baru berhasil!";
+}
+
+function simpanKegiatanDanPartisipasi(dataKegiatan, listNIM, operatorName) {
+  if (!operatorName) throw new Error("Akses ditolak: Nama operator tidak valid");
+  if (!dataKegiatan || !dataKegiatan.namaKegiatan || !dataKegiatan.kategori || !dataKegiatan.tanggalKegiatan) {
+    throw new Error("Data kegiatan tidak lengkap.");
+  }
+  if (!listNIM || listNIM.length === 0) {
+    throw new Error("Pilih minimal satu anggota partisipan.");
+  }
+  
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetK = ss.getSheetByName("Kegiatan");
+    var sheetP = ss.getSheetByName("Partisipasi_Kegiatan");
+    var sheetA = ss.getSheetByName("Anggota");
+    
+    if (!sheetK || !sheetP || !sheetA) {
+      throw new Error("Sheet Kegiatan, Partisipasi_Kegiatan, atau Anggota tidak ditemukan.");
+    }
+    
+    // Validate NIMs exist in Anggota
+    var aData = sheetA.getDataRange().getValues();
+    var existingNIMs = {};
+    for (var i = 1; i < aData.length; i++) {
+      existingNIMs[cleanNIM(aData[i][2])] = true;
+    }
+    
+    for (var k = 0; k < listNIM.length; k++) {
+      var cleanNimVal = cleanNIM(listNIM[k]);
+      if (!existingNIMs[cleanNimVal]) {
+        throw new Error("NIM " + listNIM[k] + " tidak terdaftar di database Anggota.");
+      }
+    }
+    
+    // Generate ID Kegiatan (KGT-XXX)
+    var nextIdNum = 1;
+    var kData = sheetK.getDataRange().getValues();
+    for (var i = 1; i < kData.length; i++) {
+      var idStr = String(kData[i][0]);
+      var match = idStr.match(/KGT-(\d+)/);
+      if (match) {
+        var num = parseInt(match[1], 10);
+        if (num >= nextIdNum) nextIdNum = num + 1;
+      }
+    }
+    var idKegiatan = "KGT-" + String(nextIdNum).padStart(3, '0');
+    
+    // Parse Tanggal
+    var tanggalVal = new Date(dataKegiatan.tanggalKegiatan);
+    
+    // Append to Kegiatan
+    sheetK.appendRow([
+      idKegiatan,
+      dataKegiatan.namaKegiatan.trim(),
+      tanggalVal,
+      dataKegiatan.kategori
+    ]);
+    
+    // Append to Partisipasi_Kegiatan (Batch)
+    var nextPrtNum = 1;
+    var pData = sheetP.getDataRange().getValues();
+    for (var j = 1; j < pData.length; j++) {
+      var idStr = String(pData[j][0]);
+      var match = idStr.match(/PRT-(\d+)/);
+      if (match) {
+        var num = parseInt(match[1], 10);
+        if (num >= nextPrtNum) nextPrtNum = num + 1;
+      }
+    }
+    
+    var rowsToAppend = [];
+    for (var k = 0; k < listNIM.length; k++) {
+      var idPartisipasi = "PRT-" + String(nextPrtNum++).padStart(4, '0');
+      rowsToAppend.push([
+        idPartisipasi,
+        cleanNIM(listNIM[k]),
+        idKegiatan
+      ]);
+    }
+    
+    var lastRow = sheetP.getLastRow();
+    sheetP.getRange(lastRow + 1, 1, rowsToAppend.length, 3).setValues(rowsToAppend);
+    
+    console.log("Operator " + operatorName + " menyimpan kegiatan " + idKegiatan + " dengan " + listNIM.length + " partisipan.");
+    return { success: true, idKegiatan: idKegiatan, count: listNIM.length };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function hitungKeaktifanDinamis(nim) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetK = ss.getSheetByName("Kegiatan");
+  var sheetP = ss.getSheetByName("Partisipasi_Kegiatan");
+  
+  var panitia = 0;
+  var delegasiKegiatan = 0;
+  var delegasiPeserta = 0;
+  
+  if (!sheetP || !sheetK) {
+    return { panitia: 0, delegasiKegiatan: 0, delegasiPeserta: 0, total: 0 };
+  }
+  
+  var kMap = {};
+  var kData = sheetK.getDataRange().getValues();
+  for (var i = 1; i < kData.length; i++) {
+    kMap[kData[i][0]] = kData[i][3]; // ID -> Kategori
+  }
+  
+  var pData = sheetP.getDataRange().getValues();
+  var cleanNimInput = cleanNIM(nim);
+  for (var j = 1; j < pData.length; j++) {
+    if (cleanNIM(pData[j][1]) === cleanNimInput) {
+      var kId = pData[j][2];
+      var kat = kMap[kId];
+      if (kat === "Kepanitiaan") panitia++;
+      else if (kat === "Delegasi Kegiatan") delegasiKegiatan++;
+      else if (kat === "Delegasi Peserta") delegasiPeserta++;
+    }
+  }
+  
+  return {
+    panitia: panitia,
+    delegasiKegiatan: delegasiKegiatan,
+    delegasiPeserta: delegasiPeserta,
+    total: panitia + delegasiKegiatan + delegasiPeserta
+  };
+}
+
+function getSemuaKegiatan() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetK = ss.getSheetByName("Kegiatan");
+  var sheetP = ss.getSheetByName("Partisipasi_Kegiatan");
+  if (!sheetK) return [];
+  
+  var kData = sheetK.getDataRange().getValues();
+  if (kData.length <= 1) return [];
+  
+  var partMap = {};
+  if (sheetP) {
+    var pData = sheetP.getDataRange().getValues();
+    for (var j = 1; j < pData.length; j++) {
+      var kId = pData[j][2];
+      var nim = String(pData[j][1]);
+      if (!partMap[kId]) partMap[kId] = [];
+      partMap[kId].push(nim);
+    }
+  }
+  
+  var list = [];
+  for (var i = 1; i < kData.length; i++) {
+    var row = kData[i];
+    var dateVal = row[2];
+    var formattedDate = "";
+    if (dateVal instanceof Date) {
+      var year = dateVal.getFullYear();
+      var month = String(dateVal.getMonth() + 1).padStart(2, '0');
+      var day = String(dateVal.getDate()).padStart(2, '0');
+      formattedDate = year + "-" + month + "-" + day;
+    } else if (dateVal) {
+      formattedDate = String(dateVal);
+    }
+    
+    list.push({
+      id: row[0],
+      nama: row[1],
+      tanggal: formattedDate,
+      kategori: row[3],
+      partisipan: partMap[row[0]] || []
+    });
+  }
+  return list;
+}
+
+function getDataBendahara(semester, tahunAkademik) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetAnggota = ss.getSheetByName("Anggota");
+  var sheetKas = ss.getSheetByName("Kas");
+  
+  if (!sheetAnggota) return [];
+  
+  var aData = sheetAnggota.getDataRange().getValues();
+  if (aData.length <= 1) return [];
+  
+  var kasMap = {};
+  if (sheetKas) {
+    var kData = sheetKas.getDataRange().getValues();
+    for (var i = 1; i < kData.length; i++) {
+      var kNim = String(kData[i][1]);
+      var kSem = String(kData[i][2]);
+      var kYear = String(kData[i][3]);
+      var kStatus = String(kData[i][4]);
+      var kDateVal = kData[i][5];
+      var kDateStr = "";
+      if (kDateVal instanceof Date) {
+        var year = kDateVal.getFullYear();
+        var month = String(kDateVal.getMonth() + 1).padStart(2, '0');
+        var day = String(kDateVal.getDate()).padStart(2, '0');
+        kDateStr = year + "-" + month + "-" + day;
+      } else if (kDateVal) {
+        kDateStr = String(kDateVal);
+      }
+      
+      if (kSem === semester && kYear === tahunAkademik) {
+        kasMap[kNim] = {
+          status: kStatus,
+          tanggalBayar: kDateStr
+        };
+      }
+    }
+  }
+  
+  var list = [];
+  for (var j = 1; j < aData.length; j++) {
+    var row = aData[j];
+    var nim = String(row[2]);
+    var statusObj = kasMap[nim] || { status: "Belum Lunas", tanggalBayar: "" };
+    
+    list.push({
+      id: row[0],
+      nama: row[1],
+      nim: nim,
+      divisi: row[3],
+      penerimaanKe: row[4],
+      jabatan: row[5],
+      rekeningBNI: row[10] || "",
+      status: statusObj.status,
+      tanggalBayar: statusObj.tanggalBayar
+    });
+  }
+  return list;
+}
+
+function updateRekeningAnggota(nim, rekeningBNI, operatorName) {
+  if (!operatorName) throw new Error("Akses ditolak: Nama operator tidak valid");
+  
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("Anggota");
+    if (!sheet) throw new Error("Database 'Anggota' tidak ditemukan");
+    
+    var data = sheet.getDataRange().getValues();
+    var targetRowIndex = -1;
+    var cleanNimInput = cleanNIM(nim);
+    
+    for (var i = 1; i < data.length; i++) {
+      if (cleanNIM(data[i][2]) === cleanNimInput) {
+        targetRowIndex = i + 1;
+        break;
+      }
+    }
+    
+    if (targetRowIndex === -1) {
+      throw new Error("Anggota dengan NIM " + nim + " tidak ditemukan.");
+    }
+    
+    sheet.getRange(targetRowIndex, 11).setValue(String(rekeningBNI).trim());
+    console.log("Operator " + operatorName + " mengupdate rekening BNI NIM " + nim + " menjadi " + rekeningBNI);
+    return { success: true, message: "Rekening BNI berhasil diperbarui." };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function toggleKas(nim, semester, tahunAkademik, operatorName) {
+  if (!operatorName) throw new Error("Akses ditolak: Nama operator tidak valid");
+  
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetKas = ss.getSheetByName("Kas");
+    if (!sheetKas) throw new Error("Database 'Kas' tidak ditemukan");
+    
+    var data = sheetKas.getDataRange().getValues();
+    var targetRowIndex = -1;
+    var currentStatus = "Belum Lunas";
+    var cleanNimInput = cleanNIM(nim);
+    
+    for (var i = 1; i < data.length; i++) {
+      var rowNim = cleanNIM(data[i][1]);
+      var rowSem = String(data[i][2]);
+      var rowYear = String(data[i][3]);
+      
+      if (rowNim === cleanNimInput && rowSem === semester && rowYear === tahunAkademik) {
+        targetRowIndex = i + 1;
+        currentStatus = data[i][4];
+        break;
+      }
+    }
+    
+    var newStatus = "";
+    var tanggalBayar = "";
+    
+    if (targetRowIndex !== -1) {
+      if (currentStatus === "Lunas") {
+        newStatus = "Belum Lunas";
+        tanggalBayar = "";
+      } else {
+        newStatus = "Lunas";
+        tanggalBayar = new Date();
+      }
+      sheetKas.getRange(targetRowIndex, 5).setValue(newStatus);
+      sheetKas.getRange(targetRowIndex, 6).setValue(tanggalBayar);
+    } else {
+      // Find next ID
+      var maxId = 0;
+      for (var j = 1; j < data.length; j++) {
+        var idStr = String(data[j][0]);
+        var match = idStr.match(/KAS-(\d+)/);
+        if (match) {
+          var num = parseInt(match[1], 10);
+          if (num > maxId) maxId = num;
+        }
+      }
+      var newId = "KAS-" + String(maxId + 1).padStart(4, '0');
+      newStatus = "Lunas";
+      tanggalBayar = new Date();
+      
+      sheetKas.appendRow([
+        newId,
+        cleanNimInput,
+        semester,
+        tahunAkademik,
+        newStatus,
+        tanggalBayar
+      ]);
+    }
+    
+    var formattedDate = "";
+    if (tanggalBayar instanceof Date) {
+      var year = tanggalBayar.getFullYear();
+      var month = String(tanggalBayar.getMonth() + 1).padStart(2, '0');
+      var day = String(tanggalBayar.getDate()).padStart(2, '0');
+      formattedDate = year + "-" + month + "-" + day;
+    }
+    
+    console.log("Operator " + operatorName + " mengubah status KAS NIM " + nim + " (" + semester + " " + tahunAkademik + ") menjadi " + newStatus);
+    return { success: true, status: newStatus, tanggalBayar: formattedDate };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getDashboardData() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  var sheetAnggota = ss.getSheetByName("Anggota");
+  var sheetKas = ss.getSheetByName("Kas");
+  var sheetPartisipasi = ss.getSheetByName("Partisipasi_Kegiatan");
+  var sheetKegiatan = ss.getSheetByName("Kegiatan");
+  
+  var anggotaData = sheetAnggota ? sheetAnggota.getDataRange().getValues() : [];
+  var kasData = sheetKas ? sheetKas.getDataRange().getValues() : [];
+  var partisipasiData = sheetPartisipasi ? sheetPartisipasi.getDataRange().getValues() : [];
+  
+  var divisiCounts = {};
+  var totalAnggotaOnly = 0;
+  var anggotaMap = {}; // NIM -> { id, nama, divisi, jabatan }
+  
+  for (var i = 1; i < anggotaData.length; i++) {
+    var id = anggotaData[i][0];
+    var nama = anggotaData[i][1];
+    var nim = String(anggotaData[i][2]);
+    var divisi = anggotaData[i][3];
+    var jabatan = anggotaData[i][5];
+    
+    anggotaMap[nim] = { id: id, nama: nama, divisi: divisi, jabatan: jabatan };
+    
+    if (jabatan === "Anggota") {
+      totalAnggotaOnly++;
+      if (!divisiCounts[divisi]) {
+        divisiCounts[divisi] = 0;
+      }
+      divisiCounts[divisi]++;
+    }
+  }
+  
+  var divisiStats = [];
+  for (var div in divisiCounts) {
+    divisiStats.push({ divisi: div, jumlah: divisiCounts[div] });
+  }
+  
+  // Kas payment stats per Semester + Tahun Akademik
+  var kasStats = {}; // "Semester Tahun" -> { lunas: X }
+  for (var j = 1; j < kasData.length; j++) {
+    var nim = String(kasData[j][1]);
+    var semester = kasData[j][2];
+    var tahun = kasData[j][3];
+    var status = kasData[j][4];
+    
+    var key = semester + " " + tahun;
+    if (!kasStats[key]) {
+      kasStats[key] = { lunas: 0 };
+    }
+    
+    if (status === "Lunas") {
+      if (anggotaMap[nim] && anggotaMap[nim].jabatan === "Anggota") {
+        kasStats[key].lunas++;
+      }
+    }
+  }
+  
+  var kasStatsList = [];
+  for (var key in kasStats) {
+    var parts = key.split(" ");
+    var sem = parts[0];
+    var thn = parts[1];
+    kasStatsList.push({
+      semester: sem,
+      tahunAkademik: thn,
+      lunas: kasStats[key].lunas,
+      total: totalAnggotaOnly,
+      persentase: totalAnggotaOnly > 0 ? Math.round((kasStats[key].lunas / totalAnggotaOnly) * 100) : 0
+    });
+  }
+  
+  // Top 5 active members
+  var partCounts = {}; // NIM -> count
+  for (var k = 1; k < partisipasiData.length; k++) {
+    var nim = String(partisipasiData[k][1]);
+    if (anggotaMap[nim] && anggotaMap[nim].jabatan === "Anggota") {
+      if (!partCounts[nim]) {
+        partCounts[nim] = 0;
+      }
+      partCounts[nim]++;
+    }
+  }
+  
+  var leaderboard = [];
+  for (var nim in partCounts) {
+    if (anggotaMap[nim]) {
+      leaderboard.push({
+        nim: nim,
+        nama: anggotaMap[nim].nama,
+        divisi: anggotaMap[nim].divisi,
+        jumlahPartisipasi: partCounts[nim]
+      });
+    }
+  }
+  
+  leaderboard.sort(function(a, b) {
+    return b.jumlahPartisipasi - a.jumlahPartisipasi;
+  });
+  
+  var top5 = leaderboard.slice(0, 5);
+  
+  return {
+    divisiStats: divisiStats,
+    kasStats: kasStatsList,
+    leaderboard: top5,
+    totalAnggota: totalAnggotaOnly
+  };
 }

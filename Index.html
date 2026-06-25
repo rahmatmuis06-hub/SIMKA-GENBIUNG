@@ -7,6 +7,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Chart.js & SheetJS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- CSS Styles Injection -->
   <?!= include('CSS'); ?>
 </head>
@@ -92,6 +95,22 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           Input Penugasan
+        </div>
+      </li>
+      <li>
+        <div class="nav-item" onclick="showTab('kegiatan-tab')">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.03 0 1.9.693 2.166 1.638m-7.377 2.24l-.407-.051a2.25 2.25 0 00-2.518 2.223v8.441a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-8.441a2.25 2.25 0 00-2.518-2.223l-.407.051" />
+          </svg>
+          Input Kegiatan
+        </div>
+      </li>
+      <li>
+        <div class="nav-item" onclick="showTab('bendahara-tab')">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5h16.5M5.25 7.5h13.5m-18 9v-9h18v9a2.25 2.25 0 01-2.25 2.25H3.75a2.25 2.25 0 01-2.25-2.25zm6.75 0H12v.008h-.008v-.008zm0-2.25H12v.008h-.008v-.008z" />
+          </svg>
+          Bendahara
         </div>
       </li>
       <li>
@@ -198,25 +217,43 @@
       </div>
 
       <!-- Division Statistics Chart -->
-      <div class="chart-container">
-        <h2 class="heading-lg" style="margin-bottom: 6px;">Total Keaktifan Berdasarkan Divisi</h2>
-        <p style="color: var(--ink-mute); font-size: 12px; margin-bottom: 20px;">
-          Grafik kontribusi proker gabungan dari 6 divisi organisasi (Excluding BPH/Kadiv).
-        </p>
-        
-        <!-- SVG Bar Chart -->
-        <svg id="bar-chart-container" class="bar-chart-svg">
-          <defs>
-            <linearGradient id="bar-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stop-color="var(--magenta)" />
-              <stop offset="100%" stop-color="var(--primary)" />
-            </linearGradient>
-          </defs>
-        </svg>
+      <div class="panel-grid" style="margin-bottom: 24px;">
+        <div class="panel-card" style="padding: 24px;">
+          <h2 class="heading-lg" style="margin-bottom: 6px;">Proporsi Anggota Per Divisi</h2>
+          <p style="color: var(--ink-mute); font-size: 12px; margin-bottom: 20px;">
+            Persentase sebaran anggota taktis di 6 divisi organisasi (Excluding BPH/Kadiv).
+          </p>
+          <div class="chart-canvas-wrapper" style="position: relative; height: 260px;">
+            <canvas id="chart-divisi"></canvas>
+          </div>
+        </div>
+
+        <div class="panel-card" style="padding: 24px;">
+          <h2 class="heading-lg" style="margin-bottom: 6px;">Realisasi Pembayaran Kas</h2>
+          <p style="color: var(--ink-mute); font-size: 12px; margin-bottom: 20px;">
+            Tingkat kepatuhan iuran kas taktis per semester (Target: Anggota Taktis).
+          </p>
+          <div class="chart-canvas-wrapper" style="position: relative; height: 260px;">
+            <canvas id="chart-kas"></canvas>
+          </div>
+        </div>
       </div>
 
       <!-- Dual Board Panels -->
-      <div class="panel-grid">
+      <div class="panel-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+        <!-- Leaderboard (Baru) -->
+        <div class="panel-card">
+          <div class="panel-header">
+            <h2 class="heading-lg">🏆 Top 5 Teraktif</h2>
+            <span class="badge badge-primary" style="background-color: #ffd700; color: #000; font-weight: 600;">Dinamis</span>
+          </div>
+          <p style="color: var(--ink-mute); font-size: 12px; margin-bottom: 20px;">
+            5 Anggota teraktif dihitung secara dinamis dari database Kegiatan baru.
+          </p>
+          <div class="member-row-list" id="leaderboard-list">
+            <div style="text-align:center;padding:24px;color:var(--ink-mute)">Memuat data...</div>
+          </div>
+        </div>
         <!-- Zona Kontributor Utama (Kiri) -->
         <div class="panel-card">
           <div class="panel-header">
@@ -443,6 +480,230 @@
           <button id="btn-save-wa" class="btn btn-primary" onclick="saveWhatsAppList()" disabled style="margin-top: auto; width:100%; height:42px;">
             Simpan Seluruh Delegasi Terpilih
           </button>
+        </div>
+      </div>
+      </div>
+    </div>
+
+    <!-- ----------------------------------------------------
+     * TAB PANEL: INPUT KEGIATAN & PARTISIPASI (OTOMATISASI POIN KEAKTIFAN)
+     * ---------------------------------------------------- -->
+    <div class="tab-panel" id="kegiatan-tab" style="display: none;">
+      <h1 class="display-xl">Input Kegiatan & Partisipasi</h1>
+      <p style="color: var(--ink-mute); font-size: 14px; margin-bottom: 32px;">
+        Catat kepanitiaan, delegasi kegiatan, dan delegasi peserta secara terstruktur untuk kalkulasi keaktifan otomatis.
+      </p>
+
+      <div class="parser-container">
+        <!-- Left: Form Input Kegiatan & Partisipan -->
+        <div class="parser-input-panel" style="flex: 1.2;">
+          <h2 class="heading-md" style="color: var(--ink); margin-bottom: 20px;">1. Detail Kegiatan & Partisipan</h2>
+          
+          <div class="form-group">
+            <label class="form-label" for="kegiatan-nama">Nama Kegiatan</label>
+            <input type="text" class="form-control" id="kegiatan-nama" placeholder="Contoh: Webinar Potensi Diri 2026" required>
+          </div>
+          
+          <div style="display: flex; gap: 16px; margin-bottom: 16px;">
+            <div class="form-group" style="flex: 1;">
+              <label class="form-label" for="kegiatan-kategori">Kategori Keaktifan</label>
+              <select class="form-control" id="kegiatan-kategori" required>
+                <option value="Kepanitiaan">Kepanitiaan</option>
+                <option value="Delegasi Kegiatan">Delegasi Kegiatan</option>
+                <option value="Delegasi Peserta">Delegasi Peserta</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex: 1;">
+              <label class="form-label" for="kegiatan-tanggal">Tanggal Kegiatan</label>
+              <input type="date" class="form-control" id="kegiatan-tanggal" required>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 8px;">
+            <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>Pilih Anggota Partisipan</span>
+              <div style="display: flex; gap: 8px;">
+                <button type="button" class="btn" style="padding: 2px 8px; font-size: 11px; height: auto;" onclick="selectAllKegiatanMembers(true)">Pilih Semua</button>
+                <button type="button" class="btn" style="padding: 2px 8px; font-size: 11px; height: auto;" onclick="selectAllKegiatanMembers(false)">Kosongkan</button>
+              </div>
+            </label>
+            <input type="text" class="form-control" id="kegiatan-member-search" placeholder="Cari nama atau NIM..." style="margin-bottom: 8px; height: 36px;" oninput="filterKegiatanMembersList()">
+          </div>
+
+          <!-- Scrollable Grouped Checkbox List -->
+          <div class="checkbox-list-container" id="kegiatan-members-list-container">
+            <!-- Populated by JS -->
+          </div>
+
+          <button id="btn-save-kegiatan" class="btn btn-primary" onclick="handleSaveKegiatan()" style="width: 100%; margin-top: 20px; height: 42px;">
+            Simpan Kegiatan & Partisipasi
+          </button>
+        </div>
+
+        <!-- Right: Riwayat Kegiatan -->
+        <div class="parser-preview-panel" style="flex: 1.8; max-height: 750px; overflow-y: auto;">
+          <h2 class="heading-md" style="color: var(--ink); margin-bottom: 6px;">2. Riwayat Kegiatan Terdaftar</h2>
+          <p style="color: var(--ink-mute); font-size: 12px; margin-bottom: 20px;">
+            Daftar kegiatan yang telah dimasukkan beserta total partisipan yang terlibat.
+          </p>
+
+          <div class="table-responsive" style="max-height: 550px;">
+            <table class="table" style="min-width: auto;">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Nama Kegiatan</th>
+                  <th>Kategori</th>
+                  <th>Tanggal</th>
+                  <th style="text-align: center;">Partisipan</th>
+                </tr>
+              </thead>
+              <tbody id="kegiatan-history-table-body">
+                <!-- Rendered by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ----------------------------------------------------
+     * TAB PANEL: BENDAHARA (REKENING & KAS SEMESTER)
+     * ---------------------------------------------------- -->
+    <div class="tab-panel" id="bendahara-tab" style="display: none;">
+      <h1 class="display-xl">Halaman Bendahara</h1>
+      <p style="color: var(--ink-mute); font-size: 14px; margin-bottom: 32px;">
+        Kelola pencatatan nomor rekening BNI anggota serta status pembayaran uang kas per semester.
+      </p>
+
+      <!-- Section 1: Uang Kas Semester -->
+      <div class="panel-card" style="margin-bottom: 32px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 24px;">
+          <div>
+            <h2 class="heading-lg" style="color: var(--ink);">💰 Kontrol Pembayaran Kas Semester</h2>
+            <p style="color: var(--ink-mute); font-size: 13px; margin-top: 4px;">Pencatatan lunas/belum iuran kas taktis anggota per semester.</p>
+          </div>
+          <div class="filter-bar" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <select class="form-control" id="kas-semester-select" style="width: 120px; height: 38px;">
+              <option value="Ganjil">Ganjil</option>
+              <option value="Genap">Genap</option>
+            </select>
+            <input type="text" class="form-control" id="kas-tahun-select" placeholder="2025/2026" style="width: 120px; height: 38px;" value="2025/2026">
+            <button class="btn btn-primary" onclick="loadKasData()" style="height: 38px; padding: 0 16px;">Tampilkan</button>
+          </div>
+        </div>
+
+        <!-- Summary Statistics Card for Kas -->
+        <div class="kas-summary-card" id="kas-summary-container" style="display: none; margin-bottom: 24px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-size: 14px; font-weight: 500; color: var(--ink-secondary);">Progres Pembayaran Kas Semester</span>
+            <span id="kas-percentage-label" style="font-size: 16px; font-weight: 600; color: var(--primary);">0% (0 / 0 Anggota)</span>
+          </div>
+          <div class="kas-progress-bar">
+            <div class="kas-progress-fill" id="kas-progress-fill-element" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <select class="form-control" id="kas-filter-divisi" onchange="filterKasTable()" style="width: 150px; height: 36px; font-size: 13px;">
+              <option value="">Semua Divisi</option>
+              <option value="Pendidikan">Pendidikan</option>
+              <option value="Kominfo">Kominfo</option>
+              <option value="Lingkungan Hidup">Lingkungan Hidup</option>
+              <option value="Kesehatan Masyarakat">Kesehatan Masyarakat</option>
+              <option value="Kewirausahaan">Kewirausahaan</option>
+              <option value="Potensi Diri">Potensi Diri</option>
+            </select>
+            <select class="form-control" id="kas-filter-penerimaan" onchange="filterKasTable()" style="width: 150px; height: 36px; font-size: 13px;">
+              <option value="">Semua Penerimaan</option>
+              <option value="1">Penerimaan 1</option>
+              <option value="2">Penerimaan 2</option>
+              <option value="3">Penerimaan 3</option>
+              <option value="4">Penerimaan 4</option>
+            </select>
+            <input type="text" class="form-control" id="kas-search-input" placeholder="Cari nama atau NIM..." oninput="filterKasTable()" style="width: 180px; height: 36px; font-size: 13px;">
+          </div>
+          <button class="btn btn-secondary export-btn" onclick="exportKasToExcel()" style="height: 36px; padding: 0 14px; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+            📥 Ekspor Kas Excel
+          </button>
+        </div>
+
+        <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
+          <table class="table" id="kas-table">
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>Nama Lengkap</th>
+                <th>NIM</th>
+                <th>Divisi</th>
+                <th>Gelombang</th>
+                <th>Status Kas</th>
+                <th>Tanggal Bayar</th>
+              </tr>
+            </thead>
+            <tbody id="kas-table-body">
+              <tr>
+                <td colspan="7" style="text-align: center; color: var(--ink-mute); padding: 32px;">
+                  Silakan masukkan filter semester & tahun akademik lalu klik "Tampilkan".
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Section 2: Data Rekening Anggota -->
+      <div class="panel-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 24px;">
+          <div>
+            <h2 class="heading-lg" style="color: var(--ink);">💳 Database Rekening BNI Anggota</h2>
+            <p style="color: var(--ink-mute); font-size: 13px; margin-top: 4px;">Pencatatan nomor rekening BNI anggota untuk pendistribusian dana/beasiswa.</p>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <select class="form-control" id="rek-filter-divisi" onchange="filterRekeningTable()" style="width: 150px; height: 36px; font-size: 13px;">
+              <option value="">Semua Divisi</option>
+              <option value="Pendidikan">Pendidikan</option>
+              <option value="Kominfo">Kominfo</option>
+              <option value="Lingkungan Hidup">Lingkungan Hidup</option>
+              <option value="Kesehatan Masyarakat">Kesehatan Masyarakat</option>
+              <option value="Kewirausahaan">Kewirausahaan</option>
+              <option value="Potensi Diri">Potensi Diri</option>
+            </select>
+            <select class="form-control" id="rek-filter-penerimaan" onchange="filterRekeningTable()" style="width: 150px; height: 36px; font-size: 13px;">
+              <option value="">Semua Penerimaan</option>
+              <option value="1">Penerimaan 1</option>
+              <option value="2">Penerimaan 2</option>
+              <option value="3">Penerimaan 3</option>
+              <option value="4">Penerimaan 4</option>
+            </select>
+            <input type="text" class="form-control" id="rek-search-input" placeholder="Cari nama atau NIM..." oninput="filterRekeningTable()" style="width: 180px; height: 36px; font-size: 13px;">
+          </div>
+          <button class="btn btn-secondary export-btn" onclick="exportRekeningToExcel()" style="height: 36px; padding: 0 14px; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+            📥 Ekspor Rekening Excel
+          </button>
+        </div>
+
+        <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
+          <table class="table" id="rekening-table">
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>Nama Lengkap</th>
+                <th>NIM</th>
+                <th>Divisi</th>
+                <th>Gelombang</th>
+                <th>No Rekening BNI</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="rekening-table-body">
+              <!-- Rendered by JS -->
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

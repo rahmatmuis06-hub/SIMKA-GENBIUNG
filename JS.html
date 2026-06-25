@@ -10,6 +10,9 @@ let anggotaList = [];
 let operatorsList = [];
 let currentOperator = null;
 let parsedWhatsAppList = [];
+let dashboardData = null;
+let chartDivisiInstance = null;
+let chartKasInstance = null;
 
 // Safe Storage Wrapper to prevent iframe SecurityError crashes
 const SafeStorage = {
@@ -152,6 +155,10 @@ function showTab(tabId) {
     renderMembersTable();
   } else if (tabId === 'input-tab') {
     initInputTabDates();
+  } else if (tabId === 'kegiatan-tab') {
+    initKegiatanTab();
+  } else if (tabId === 'bendahara-tab') {
+    initBendaharaTab();
   } else if (tabId === 'grade-tab') {
     initGradingTab();
   } else if (tabId === 'recap-tab') {
@@ -233,11 +240,30 @@ function loadAllData() {
   showLoader();
   google.script.run
     .withSuccessHandler(function(data) {
-      hideLoader();
       anggotaList = data;
-      renderDashboard();
-      renderMembersTable();
-      populateAnggotaDropdowns();
+      google.script.run
+        .withSuccessHandler(function(dashData) {
+          hideLoader();
+          dashboardData = dashData;
+          renderDashboard();
+          renderMembersTable();
+          populateAnggotaDropdowns();
+          
+          // Refresh active tab if it's Kegiatan or Bendahara
+          const activeItem = document.querySelector(".nav-item.active");
+          if (activeItem) {
+            if (activeItem.getAttribute("onclick").includes("kegiatan-tab")) {
+              initKegiatanTab();
+            } else if (activeItem.getAttribute("onclick").includes("bendahara-tab")) {
+              initBendaharaTab();
+            }
+          }
+        })
+        .withFailureHandler(function(err) {
+          hideLoader();
+          showToast("Gagal memuat statistik dashboard: " + err.message, "error");
+        })
+        .getDashboardData();
     })
     .withFailureHandler(function(err) {
       hideLoader();
@@ -425,12 +451,15 @@ function renderDashboard() {
     }
   }
 
-  // 5. Render Division Chart (SVG)
-  renderDivisionChart(listAnggota);
+  // 5. Render Chart.js Dashboard (Division distribution, Kas percentage, and Top 5 Leaderboard)
+  renderChartJsDashboard(listAnggota);
 }
 
-function renderDivisionChart(listAnggota) {
-  // Divisions Official List
+function renderChartJsDashboard(listAnggota) {
+  // 1. Division distribution chart (Doughnut)
+  const ctxDiv = document.getElementById("chart-divisi");
+  if (!ctxDiv) return;
+
   const divisions = [
     "Pendidikan",
     "Kominfo",
@@ -440,111 +469,147 @@ function renderDivisionChart(listAnggota) {
     "Potensi Diri"
   ];
   
-  // Group activities
-  const devStats = {};
-  divisions.forEach(d => devStats[d] = 0);
-  
-  listAnggota.forEach(a => {
-    const total = (a.panitia || 0) + (a.delegasiKegiatan || 0) + (a.delegasiPeserta || 0);
-    if (devStats[a.divisi] !== undefined) {
-      devStats[a.divisi] += total;
-    }
+  const divCounts = divisions.map(div => {
+    return listAnggota.filter(a => a.divisi === div).length;
   });
 
-  const svg = document.getElementById("bar-chart-container");
-  if (!svg) return;
-  svg.innerHTML = ""; // Clear existing
-  
-  const width = svg.clientWidth || 600;
-  const height = 240;
-  const paddingLeft = 40;
-  const paddingRight = 20;
-  const paddingTop = 30;
-  const paddingBottom = 40;
-  
-  const chartWidth = width - paddingLeft - paddingRight;
-  const chartHeight = height - paddingTop - paddingBottom;
-  
-  // Get max activities
-  let maxAct = 0;
-  divisions.forEach(d => {
-    if (devStats[d] > maxAct) maxAct = devStats[d];
-  });
-  if (maxAct === 0) maxAct = 10; // Prevent divide by zero
-  
-  // Render grid lines
-  const gridLines = 4;
-  for (let g = 0; g <= gridLines; g++) {
-    const yVal = Math.round((maxAct / gridLines) * g);
-    const yPos = height - paddingBottom - (chartHeight / gridLines) * g;
-    
-    // Draw line
-    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    line.setAttribute("x1", paddingLeft);
-    line.setAttribute("y1", yPos);
-    line.setAttribute("x2", width - paddingRight);
-    line.setAttribute("y2", yPos);
-    line.setAttribute("stroke", "var(--hairline)");
-    line.setAttribute("stroke-dasharray", "3,3");
-    svg.appendChild(line);
-    
-    // Draw text
-    const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    txt.setAttribute("x", paddingLeft - 10);
-    txt.setAttribute("y", yPos + 4);
-    txt.setAttribute("fill", "var(--ink-mute)");
-    txt.setAttribute("font-size", "10px");
-    txt.setAttribute("text-anchor", "end");
-    txt.textContent = yVal;
-    svg.appendChild(txt);
+  if (chartDivisiInstance) {
+    chartDivisiInstance.destroy();
   }
 
-  // Draw Bars
-  const barGap = 20;
-  const numBars = divisions.length;
-  const barWidth = (chartWidth - (barGap * (numBars - 1))) / numBars;
-  
-  divisions.forEach((div, idx) => {
-    const count = devStats[div];
-    const barHeight = (count / maxAct) * chartHeight;
-    const xPos = paddingLeft + idx * (barWidth + barGap);
-    const yPos = height - paddingBottom - barHeight;
-    
-    // Draw Bar
-    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    rect.setAttribute("x", xPos);
-    rect.setAttribute("y", yPos);
-    rect.setAttribute("width", barWidth);
-    rect.setAttribute("height", barHeight);
-    rect.setAttribute("class", "chart-bar");
-    
-    // Create gradient effect per bar based on height
-    rect.setAttribute("fill", "url(#bar-gradient)");
-    svg.appendChild(rect);
-    
-    // Draw Count label on top of bar
-    if (count > 0) {
-      const valTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      valTxt.setAttribute("x", xPos + barWidth / 2);
-      valTxt.setAttribute("y", yPos - 8);
-      valTxt.setAttribute("class", "chart-value-text");
-      valTxt.textContent = count;
-      svg.appendChild(valTxt);
+  chartDivisiInstance = new Chart(ctxDiv, {
+    type: 'doughnut',
+    data: {
+      labels: divisions,
+      datasets: [{
+        data: divCounts,
+        backgroundColor: [
+          '#533afd', // Pendidikan (Primary)
+          '#ff3b30', // Kominfo (Danger)
+          '#34c759', // Lingkungan Hidup (Success)
+          '#ff9500', // Kesehatan Masyarakat (Warning)
+          '#af52de', // Kewirausahaan (Purple)
+          '#5856d6'  // Potensi Diri (Indigo)
+        ],
+        borderWidth: 2,
+        borderColor: 'var(--canvas-card)'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: 'var(--ink-secondary)',
+            font: { family: 'Poppins', size: 11 }
+          }
+        }
+      }
     }
-    
-    // Draw division label at bottom
-    const lblTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    lblTxt.setAttribute("x", xPos + barWidth / 2);
-    lblTxt.setAttribute("y", height - paddingBottom + 20);
-    lblTxt.setAttribute("class", "chart-text");
-    
-    // Wrap text if needed
-    let shortName = div;
-    if (div === "Kesehatan Masyarakat") shortName = "Kesmas";
-    if (div === "Lingkungan Hidup") shortName = "Lh";
-    lblTxt.textContent = shortName;
-    svg.appendChild(lblTxt);
   });
+
+  // 2. Realisasi Pembayaran Kas per Semester (Bar)
+  const ctxKas = document.getElementById("chart-kas");
+  if (!ctxKas) return;
+
+  if (chartKasInstance) {
+    chartKasInstance.destroy();
+  }
+
+  let labels = [];
+  let percentages = [];
+
+  if (dashboardData && dashboardData.kasStats && dashboardData.kasStats.length > 0) {
+    dashboardData.kasStats.forEach(stat => {
+      labels.push(`${stat.semester} ${stat.tahunAkademik}`);
+      percentages.push(stat.persentase);
+    });
+  } else {
+    labels = ["Tidak ada data"];
+    percentages = [0];
+  }
+
+  chartKasInstance = new Chart(ctxKas, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Persentase Lunas',
+        data: percentages,
+        backgroundColor: 'var(--primary)',
+        borderRadius: 6,
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          min: 0,
+          max: 100,
+          ticks: {
+            color: 'var(--ink-mute)',
+            callback: function(value) { return value + '%'; }
+          },
+          grid: {
+            color: 'var(--hairline)'
+          }
+        },
+        x: {
+          ticks: {
+            color: 'var(--ink-mute)',
+            font: { family: 'Poppins', size: 10 }
+          },
+          grid: {
+            display: false
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              return `Persentase Lunas: ${context.parsed.y}%`;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // 3. Top 5 active members leaderboard
+  const leaderboardEl = document.getElementById("leaderboard-list");
+  if (leaderboardEl) {
+    leaderboardEl.innerHTML = "";
+    if (dashboardData && dashboardData.leaderboard && dashboardData.leaderboard.length > 0) {
+      dashboardData.leaderboard.forEach(a => {
+        const item = document.createElement("div");
+        item.className = "member-list-item";
+        const match = anggotaList.find(ang => ang.nim === a.nim);
+        if (match) {
+          item.setAttribute("onclick", `openMemberProfile(${match.id})`);
+        }
+        item.innerHTML = `
+          <div class="member-item-info">
+            <span class="member-item-name">${a.nama}</span>
+            <span class="member-item-meta">${a.divisi} • NIM: ${a.nim}</span>
+          </div>
+          <div class="member-item-score" style="color: var(--primary);">
+            🏅 ${a.jumlahPartisipasi}
+          </div>
+        `;
+        leaderboardEl.appendChild(item);
+      });
+    } else {
+      leaderboardEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--ink-mute);font-size:12px;">Belum ada riwayat kegiatan baru.</div>';
+    }
+  }
 }
 
 // ----------------------------------------------------
@@ -1522,5 +1587,558 @@ function openProkerDetail(prokerName) {
       tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--ruby)">Gagal memuat detail panitia: ${err.message}</td></tr>`;
     })
     .getParticipantsByProker(prokerName);
+}
+
+// ====================================================
+// KEGIATAN & PARTISIPASI CLIENT SIDE LOGIC
+// ====================================================
+function initKegiatanTab() {
+  const dateInput = document.getElementById("kegiatan-tanggal");
+  if (dateInput && !dateInput.value) {
+    dateInput.value = getTodayDateString();
+  }
+  
+  loadDaftarAnggotaCheckbox();
+  loadRiwayatKegiatan();
+}
+
+function loadDaftarAnggotaCheckbox() {
+  const container = document.getElementById("kegiatan-members-list-container");
+  if (!container) return;
+  
+  let listAnggota = anggotaList.filter(a => a.jabatan === "Anggota");
+  
+  const grouped = {};
+  listAnggota.forEach(a => {
+    if (!grouped[a.divisi]) {
+      grouped[a.divisi] = [];
+    }
+    grouped[a.divisi].push(a);
+  });
+  
+  container.innerHTML = "";
+  
+  const divisions = [
+    "Pendidikan",
+    "Kominfo",
+    "Lingkungan Hidup",
+    "Kesehatan Masyarakat",
+    "Kewirausahaan",
+    "Potensi Diri"
+  ];
+  
+  divisions.forEach(div => {
+    const members = grouped[div] || [];
+    if (members.length === 0) return;
+    
+    const header = document.createElement("div");
+    header.className = "checkbox-group-header";
+    header.textContent = div;
+    container.appendChild(header);
+    
+    members.forEach(a => {
+      const item = document.createElement("label");
+      item.className = "checkbox-item";
+      item.dataset.search = `${a.nama.toLowerCase()} ${a.nim}`;
+      item.innerHTML = `
+        <input type="checkbox" name="kegiatan-member-checkbox" value="${a.nim}">
+        <span>${a.nama} (${a.nim})</span>
+      `;
+      container.appendChild(item);
+    });
+  });
+  
+  if (container.children.length === 0) {
+    container.innerHTML = '<div style="text-align:center;padding:24px;color:var(--ink-mute);font-size:12px;">Tidak ada data anggota.</div>';
+  }
+}
+
+function selectAllKegiatanMembers(checked) {
+  const checkboxes = document.querySelectorAll('input[name="kegiatan-member-checkbox"]');
+  checkboxes.forEach(cb => {
+    const parentLabel = cb.closest('.checkbox-item');
+    if (parentLabel && parentLabel.style.display !== "none") {
+      cb.checked = checked;
+    }
+  });
+}
+
+function filterKegiatanMembersList() {
+  const query = document.getElementById("kegiatan-member-search").value.trim().toLowerCase();
+  const items = document.querySelectorAll("#kegiatan-members-list-container .checkbox-item");
+  
+  items.forEach(item => {
+    const text = item.dataset.search || "";
+    if (text.includes(query)) {
+      item.style.display = "flex";
+    } else {
+      item.style.display = "none";
+    }
+  });
+  
+  let currentHeader = null;
+  let hasVisibleInGroup = false;
+  
+  const children = document.getElementById("kegiatan-members-list-container").children;
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+    if (child.classList.contains("checkbox-group-header")) {
+      if (currentHeader) {
+        currentHeader.style.display = hasVisibleInGroup ? "block" : "none";
+      }
+      currentHeader = child;
+      hasVisibleInGroup = false;
+    } else if (child.classList.contains("checkbox-item")) {
+      if (child.style.display !== "none") {
+        hasVisibleInGroup = true;
+      }
+    }
+  }
+  if (currentHeader) {
+    currentHeader.style.display = hasVisibleInGroup ? "block" : "none";
+  }
+}
+
+function loadRiwayatKegiatan() {
+  const tbody = document.getElementById("kegiatan-history-table-body");
+  if (!tbody) return;
+  
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--ink-mute)">Memuat riwayat...</td></tr>';
+  
+  google.script.run
+    .withSuccessHandler(function(list) {
+      tbody.innerHTML = "";
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--ink-mute)">Belum ada kegiatan terdaftar.</td></tr>';
+        return;
+      }
+      
+      list.forEach(k => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><span class="badge badge-primary" style="font-family: monospace;">${k.id}</span></td>
+          <td style="font-weight: 500;">${k.nama}</td>
+          <td><span class="badge badge-secondary">${k.kategori}</span></td>
+          <td>${k.tanggal}</td>
+          <td style="text-align: center; font-weight: 600; color: var(--primary);">${k.partisipan.length} Anggota</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    })
+    .withFailureHandler(function(err) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--ruby);padding:24px;">Gagal memuat: ${err.message}</td></tr>`;
+    })
+    .getSemuaKegiatan();
+}
+
+function handleSaveKegiatan() {
+  const nama = document.getElementById("kegiatan-nama").value.trim();
+  const kategori = document.getElementById("kegiatan-kategori").value;
+  const tanggal = document.getElementById("kegiatan-tanggal").value;
+  
+  if (!nama) {
+    showToast("Harap isi Nama Kegiatan.", "error");
+    return;
+  }
+  if (!tanggal) {
+    showToast("Harap isi Tanggal Kegiatan.", "error");
+    return;
+  }
+  
+  const checkedNIMs = [];
+  const checkboxes = document.querySelectorAll('input[name="kegiatan-member-checkbox"]:checked');
+  checkboxes.forEach(cb => {
+    checkedNIMs.push(cb.value);
+  });
+  
+  if (checkedNIMs.length === 0) {
+    showToast("Pilih minimal satu anggota partisipan.", "error");
+    return;
+  }
+  
+  const dataKegiatan = {
+    namaKegiatan: nama,
+    kategori: kategori,
+    tanggalKegiatan: tanggal
+  };
+  
+  showLoader();
+  google.script.run
+    .withSuccessHandler(function(res) {
+      hideLoader();
+      showToast(`Kegiatan ${res.idKegiatan} berhasil disimpan dengan ${res.count} partisipan.`, "success");
+      
+      document.getElementById("kegiatan-nama").value = "";
+      document.getElementById("kegiatan-member-search").value = "";
+      selectAllKegiatanMembers(false);
+      
+      loadAllData();
+      initKegiatanTab();
+    })
+    .withFailureHandler(function(err) {
+      hideLoader();
+      showToast("Gagal menyimpan kegiatan: " + err.message, "error");
+    })
+    .simpanKegiatanDanPartisipasi(dataKegiatan, checkedNIMs, currentOperator.nama);
+}
+
+// ====================================================
+// BENDAHARA & KAS CLIENT SIDE LOGIC
+// ====================================================
+let currentKasList = [];
+
+function initBendaharaTab() {
+  renderRekeningTable();
+  loadKasData();
+}
+
+function loadKasData() {
+  const semester = document.getElementById("kas-semester-select").value;
+  const tahun = document.getElementById("kas-tahun-select").value.trim();
+  
+  if (!tahun) {
+    showToast("Tahun akademik wajib diisi (contoh: 2025/2026)", "error");
+    return;
+  }
+  
+  showLoader();
+  const tbody = document.getElementById("kas-table-body");
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--ink-mute)">Memuat data kas...</td></tr>';
+  
+  google.script.run
+    .withSuccessHandler(function(list) {
+      hideLoader();
+      currentKasList = list;
+      renderKasTable(list);
+      updateKasSummary(list);
+    })
+    .withFailureHandler(function(err) {
+      hideLoader();
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--ruby);padding:24px;">Gagal memuat kas: ${err.message}</td></tr>`;
+    })
+    .getDataBendahara(semester, tahun);
+}
+
+function renderKasTable(list) {
+  const tbody = document.getElementById("kas-table-body");
+  tbody.innerHTML = "";
+  
+  const filteredList = list.filter(a => a.jabatan === "Anggota");
+  
+  if (filteredList.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--ink-mute)">Tidak ada data anggota.</td></tr>';
+    return;
+  }
+  
+  const semester = document.getElementById("kas-semester-select").value;
+  const tahun = document.getElementById("kas-tahun-select").value.trim();
+  
+  filteredList.forEach((a, index) => {
+    const tr = document.createElement("tr");
+    tr.className = "kas-row-item";
+    tr.dataset.divisi = a.divisi;
+    tr.dataset.penerimaan = a.penerimaanKe;
+    tr.dataset.search = `${a.nama.toLowerCase()} ${a.nim}`;
+    
+    const isLunas = a.status === "Lunas";
+    const statusClass = isLunas ? "lunas" : "belum-lunas";
+    const statusText = isLunas ? "✅ Lunas" : "❌ Belum Lunas";
+    
+    tr.innerHTML = `
+      <td>${index + 1}</td>
+      <td style="font-weight: 500;">${a.nama}</td>
+      <td style="font-family: monospace;">${a.nim}</td>
+      <td>${a.divisi}</td>
+      <td>Gel. ${a.penerimaanKe}</td>
+      <td>
+        <button class="kas-toggle-btn ${statusClass}" onclick="handleToggleKas('${a.nim}', '${semester}', '${tahun}')">
+          ${statusText}
+        </button>
+      </td>
+      <td style="font-size: 13px; color: var(--ink-secondary); font-family: monospace;">
+        ${a.tanggalBayar || "-"}
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function updateKasSummary(list) {
+  const container = document.getElementById("kas-summary-container");
+  const label = document.getElementById("kas-percentage-label");
+  const fill = document.getElementById("kas-progress-fill-element");
+  
+  const tacticalList = list.filter(a => a.jabatan === "Anggota");
+  const total = tacticalList.length;
+  const lunasCount = tacticalList.filter(a => a.status === "Lunas").length;
+  
+  if (total === 0) {
+    container.style.display = "none";
+    return;
+  }
+  
+  const percentage = Math.round((lunasCount / total) * 100);
+  label.textContent = `${percentage}% (${lunasCount} / ${total} Anggota)`;
+  fill.style.width = `${percentage}%`;
+  container.style.display = "block";
+}
+
+function handleToggleKas(nim, semester, tahun) {
+  showLoader();
+  google.script.run
+    .withSuccessHandler(function(res) {
+      hideLoader();
+      showToast(`Status kas untuk NIM ${nim} diubah menjadi ${res.status}.`, "success");
+      loadKasData();
+    })
+    .withFailureHandler(function(err) {
+      hideLoader();
+      showToast("Gagal mengubah status kas: " + err.message, "error");
+    })
+    .toggleKas(nim, semester, tahun, currentOperator.nama);
+}
+
+function filterKasTable() {
+  const divFilter = document.getElementById("kas-filter-divisi").value;
+  const penFilter = document.getElementById("kas-filter-penerimaan").value;
+  const searchInput = document.getElementById("kas-search-input").value.trim().toLowerCase();
+  
+  const rows = document.querySelectorAll("#kas-table-body .kas-row-item");
+  
+  rows.forEach(row => {
+    const divisi = row.dataset.divisi;
+    const penerimaan = row.dataset.penerimaan;
+    const searchText = row.dataset.search;
+    
+    const matchesDivisi = !divFilter || divisi === divFilter;
+    const matchesPenerimaan = !penFilter || penerimaan === penFilter;
+    const matchesSearch = !searchInput || searchText.includes(searchInput);
+    
+    if (matchesDivisi && matchesPenerimaan && matchesSearch) {
+      row.style.display = "";
+    } else {
+      row.style.display = "none";
+    }
+  });
+}
+
+function exportKasToExcel() {
+  const semester = document.getElementById("kas-semester-select").value;
+  const tahun = document.getElementById("kas-tahun-select").value.trim();
+  const filename = `Kas_Semester_${semester}_${tahun.replace('/', '_')}.xlsx`;
+  
+  const rows = [
+    ["No", "Nama Lengkap", "NIM", "Divisi", "Gelombang", "Status Kas", "Tanggal Bayar"]
+  ];
+  
+  const tacticalList = currentKasList.filter(a => a.jabatan === "Anggota");
+  
+  const divFilter = document.getElementById("kas-filter-divisi").value;
+  const penFilter = document.getElementById("kas-filter-penerimaan").value;
+  const searchInput = document.getElementById("kas-search-input").value.trim().toLowerCase();
+  
+  let index = 1;
+  tacticalList.forEach(a => {
+    const matchesDivisi = !divFilter || a.divisi === divFilter;
+    const matchesPenerimaan = !penFilter || String(a.penerimaanKe) === penFilter;
+    const matchesSearch = !searchInput || a.nama.toLowerCase().includes(searchInput) || String(a.nim).includes(searchInput);
+    
+    if (matchesDivisi && matchesPenerimaan && matchesSearch) {
+      rows.push([
+        index++,
+        a.nama,
+        a.nim,
+        a.divisi,
+        `Gelombang ${a.penerimaanKe}`,
+        a.status,
+        a.tanggalBayar || "-"
+      ]);
+    }
+  });
+  
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Kas");
+  XLSX.writeFile(workbook, filename);
+  showToast("Laporan Kas berhasil diekspor ke Excel.", "success");
+}
+
+function renderRekeningTable() {
+  const tbody = document.getElementById("rekening-table-body");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  
+  const list = anggotaList.filter(a => a.jabatan === "Anggota");
+  
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--ink-mute)">Tidak ada data anggota.</td></tr>';
+    return;
+  }
+  
+  list.forEach((a, index) => {
+    const tr = document.createElement("tr");
+    tr.className = "rek-row-item";
+    tr.dataset.divisi = a.divisi;
+    tr.dataset.penerimaan = a.penerimaanKe;
+    tr.dataset.search = `${a.nama.toLowerCase()} ${a.nim}`;
+    
+    tr.innerHTML = `
+      <td>${index + 1}</td>
+      <td style="font-weight: 500;">${a.nama}</td>
+      <td style="font-family: monospace;">${a.nim}</td>
+      <td>${a.divisi}</td>
+      <td>Gel. ${a.penerimaanKe}</td>
+      <td>
+        <span class="rekening-val" id="rek-span-${a.nim}" onclick="makeRekeningEditable('${a.nim}')">
+          ${a.rekeningBNI || 'Klik untuk mengisi'}
+        </span>
+        <div id="rek-edit-container-${a.nim}" style="display: none;">
+          <input type="text" class="form-control rekening-inline-edit" id="rek-input-${a.nim}" 
+            value="${a.rekeningBNI || ''}" 
+            onblur="saveRekeningInline('${a.nim}')" 
+            onkeydown="handleRekeningKeydown(event, '${a.nim}')">
+        </div>
+      </td>
+      <td>
+        <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 11px; height: auto;" onclick="makeRekeningEditable('${a.nim}')">
+          Edit
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function makeRekeningEditable(nim) {
+  const span = document.getElementById(`rek-span-${nim}`);
+  const container = document.getElementById(`rek-edit-container-${nim}`);
+  const input = document.getElementById(`rek-input-${nim}`);
+  
+  if (span && container && input) {
+    span.style.display = "none";
+    container.style.display = "block";
+    input.focus();
+    const val = input.value;
+    input.value = "";
+    input.value = val;
+  }
+}
+
+function saveRekeningInline(nim) {
+  const span = document.getElementById(`rek-span-${nim}`);
+  const container = document.getElementById(`rek-edit-container-${nim}`);
+  const input = document.getElementById(`rek-input-${nim}`);
+  
+  if (!span || !container || !input) return;
+  
+  const newVal = input.value.trim();
+  const oldVal = span.textContent.trim() === 'Klik untuk mengisi' ? '' : span.textContent.trim();
+  
+  span.style.display = "inline-block";
+  container.style.display = "none";
+  
+  if (newVal === oldVal) {
+    return;
+  }
+  
+  span.textContent = newVal || 'Klik untuk mengisi';
+  
+  showLoader();
+  google.script.run
+    .withSuccessHandler(function(res) {
+      hideLoader();
+      showToast(res.message, "success");
+      const member = anggotaList.find(a => a.nim === nim);
+      if (member) {
+        member.rekeningBNI = newVal;
+      }
+      renderRekeningTable();
+    })
+    .withFailureHandler(function(err) {
+      hideLoader();
+      showToast("Gagal memperbarui rekening: " + err.message, "error");
+      span.textContent = oldVal || 'Klik untuk mengisi';
+      input.value = oldVal;
+    })
+    .updateRekeningAnggota(nim, newVal, currentOperator.nama);
+}
+
+function handleRekeningKeydown(event, nim) {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    saveRekeningInline(nim);
+  } else if (event.key === "Escape") {
+    const span = document.getElementById(`rek-span-${nim}`);
+    const container = document.getElementById(`rek-edit-container-${nim}`);
+    const input = document.getElementById(`rek-input-${nim}`);
+    
+    if (span && container && input) {
+      input.value = span.textContent === 'Klik untuk mengisi' ? '' : span.textContent.trim();
+      span.style.display = "inline-block";
+      container.style.display = "none";
+    }
+  }
+}
+
+function filterRekeningTable() {
+  const divFilter = document.getElementById("rek-filter-divisi").value;
+  const penFilter = document.getElementById("rek-filter-penerimaan").value;
+  const searchInput = document.getElementById("rek-search-input").value.trim().toLowerCase();
+  
+  const rows = document.querySelectorAll("#rekening-table-body .rek-row-item");
+  
+  rows.forEach(row => {
+    const divisi = row.dataset.divisi;
+    const penerimaan = row.dataset.penerimaan;
+    const searchText = row.dataset.search;
+    
+    const matchesDivisi = !divFilter || divisi === divFilter;
+    const matchesPenerimaan = !penFilter || penerimaan === penFilter;
+    const matchesSearch = !searchInput || searchText.includes(searchInput);
+    
+    if (matchesDivisi && matchesPenerimaan && matchesSearch) {
+      row.style.display = "";
+    } else {
+      row.style.display = "none";
+    }
+  });
+}
+
+function exportRekeningToExcel() {
+  const filename = `Database_Rekening_Anggota_BNI.xlsx`;
+  
+  const rows = [
+    ["No", "Nama Lengkap", "NIM", "Divisi", "Gelombang", "Nomor Rekening BNI"]
+  ];
+  
+  const divFilter = document.getElementById("rek-filter-divisi").value;
+  const penFilter = document.getElementById("rek-filter-penerimaan").value;
+  const searchInput = document.getElementById("rek-search-input").value.trim().toLowerCase();
+  
+  let index = 1;
+  anggotaList.forEach(a => {
+    if (a.jabatan !== "Anggota") return;
+    
+    const matchesDivisi = !divFilter || a.divisi === divFilter;
+    const matchesPenerimaan = !penFilter || String(a.penerimaanKe) === penFilter;
+    const matchesSearch = !searchInput || a.nama.toLowerCase().includes(searchInput) || String(a.nim).includes(searchInput);
+    
+    if (matchesDivisi && matchesPenerimaan && matchesSearch) {
+      rows.push([
+        index++,
+        a.nama,
+        a.nim,
+        a.divisi,
+        `Gelombang ${a.penerimaanKe}`,
+        a.rekeningBNI || "-"
+      ]);
+    }
+  });
+  
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Rekening Anggota");
+  XLSX.writeFile(workbook, filename);
+  showToast("Database rekening BNI berhasil diekspor.", "success");
 }
 </script>

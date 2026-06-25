@@ -1053,6 +1053,141 @@ textarea.form-control {
 }
 
 /* ----------------------------------------------------
+ * MULTI-SELECT CHECKBOX LIST (KEGIATAN TABS)
+ * ---------------------------------------------------- */
+.checkbox-list-container {
+  max-height: 250px;
+  overflow-y: auto;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background-color: var(--bg-hover);
+  padding: 8px;
+}
+
+.checkbox-group-header {
+  font-family: 'Poppins', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--primary);
+  background-color: var(--canvas-card);
+  padding: 6px 10px;
+  margin-top: 8px;
+  margin-bottom: 4px;
+  border-radius: 4px;
+  border-left: 3px solid var(--primary);
+}
+
+.checkbox-group-header:first-child {
+  margin-top: 0;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+
+.checkbox-item:hover {
+  background-color: var(--canvas-card);
+  color: var(--ink);
+}
+
+.checkbox-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+/* ----------------------------------------------------
+ * BENDAHARA & KAS STYLING
+ * ---------------------------------------------------- */
+.kas-summary-card {
+  background: linear-gradient(135deg, var(--bg-hover) 0%, var(--canvas-card) 100%);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: var(--shadow-1);
+}
+
+.kas-progress-bar {
+  width: 100%;
+  height: 10px;
+  background-color: var(--hairline);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.kas-progress-fill {
+  height: 100%;
+  background-color: var(--primary);
+  width: 0%;
+  border-radius: 5px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.kas-toggle-btn {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 9999px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.kas-toggle-btn.lunas {
+  background-color: rgba(50, 205, 50, 0.15);
+  color: #2b8a2b;
+}
+
+.kas-toggle-btn.lunas:hover {
+  background-color: rgba(50, 205, 50, 0.25);
+}
+
+.kas-toggle-btn.belum-lunas {
+  background-color: rgba(220, 20, 60, 0.1);
+  color: var(--ruby);
+}
+
+.kas-toggle-btn.belum-lunas:hover {
+  background-color: rgba(220, 20, 60, 0.2);
+}
+
+.rekening-val {
+  font-family: 'Inter', monospace;
+  font-size: 13px;
+  color: var(--ink-secondary);
+  border-bottom: 1px dashed var(--ink-mute);
+  cursor: pointer;
+  padding-bottom: 2px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.rekening-val:hover {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.rekening-inline-edit {
+  font-family: 'Inter', monospace;
+  font-size: 13px;
+  padding: 4px 8px;
+  width: 140px;
+  height: 28px;
+}
+
+/* ----------------------------------------------------
  * RESPONSIVENESS OVERRIDES
  * ---------------------------------------------------- */
 @media (max-width: 768px) {
