@@ -98,15 +98,7 @@
         </div>
       </li>
       <li>
-        <div class="nav-item" onclick="showTab('kegiatan-tab')">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.03 0 1.9.693 2.166 1.638m-7.377 2.24l-.407-.051a2.25 2.25 0 00-2.518 2.223v8.441a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-8.441a2.25 2.25 0 00-2.518-2.223l-.407.051" />
-          </svg>
-          Input Kegiatan
-        </div>
-      </li>
-      <li>
-        <div class="nav-item" onclick="showTab('bendahara-tab')">
+        <div class="nav-item" id="nav-bendahara" onclick="showTab('bendahara-tab')">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5h16.5M5.25 7.5h13.5m-18 9v-9h18v9a2.25 2.25 0 01-2.25 2.25H3.75a2.25 2.25 0 01-2.25-2.25zm6.75 0H12v.008h-.008v-.008zm0-2.25H12v.008h-.008v-.008z" />
           </svg>
@@ -485,87 +477,6 @@
       </div>
     </div>
 
-    <!-- ----------------------------------------------------
-     * TAB PANEL: INPUT KEGIATAN & PARTISIPASI (OTOMATISASI POIN KEAKTIFAN)
-     * ---------------------------------------------------- -->
-    <div class="tab-panel" id="kegiatan-tab" style="display: none;">
-      <h1 class="display-xl">Input Kegiatan & Partisipasi</h1>
-      <p style="color: var(--ink-mute); font-size: 14px; margin-bottom: 32px;">
-        Catat kepanitiaan, delegasi kegiatan, dan delegasi peserta secara terstruktur untuk kalkulasi keaktifan otomatis.
-      </p>
-
-      <div class="parser-container">
-        <!-- Left: Form Input Kegiatan & Partisipan -->
-        <div class="parser-input-panel" style="flex: 1.2;">
-          <h2 class="heading-md" style="color: var(--ink); margin-bottom: 20px;">1. Detail Kegiatan & Partisipan</h2>
-          
-          <div class="form-group">
-            <label class="form-label" for="kegiatan-nama">Nama Kegiatan</label>
-            <input type="text" class="form-control" id="kegiatan-nama" placeholder="Contoh: Webinar Potensi Diri 2026" required>
-          </div>
-          
-          <div style="display: flex; gap: 16px; margin-bottom: 16px;">
-            <div class="form-group" style="flex: 1;">
-              <label class="form-label" for="kegiatan-kategori">Kategori Keaktifan</label>
-              <select class="form-control" id="kegiatan-kategori" required>
-                <option value="Kepanitiaan">Kepanitiaan</option>
-                <option value="Delegasi Kegiatan">Delegasi Kegiatan</option>
-                <option value="Delegasi Peserta">Delegasi Peserta</option>
-              </select>
-            </div>
-            <div class="form-group" style="flex: 1;">
-              <label class="form-label" for="kegiatan-tanggal">Tanggal Kegiatan</label>
-              <input type="date" class="form-control" id="kegiatan-tanggal" required>
-            </div>
-          </div>
-
-          <div class="form-group" style="margin-bottom: 8px;">
-            <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
-              <span>Pilih Anggota Partisipan</span>
-              <div style="display: flex; gap: 8px;">
-                <button type="button" class="btn" style="padding: 2px 8px; font-size: 11px; height: auto;" onclick="selectAllKegiatanMembers(true)">Pilih Semua</button>
-                <button type="button" class="btn" style="padding: 2px 8px; font-size: 11px; height: auto;" onclick="selectAllKegiatanMembers(false)">Kosongkan</button>
-              </div>
-            </label>
-            <input type="text" class="form-control" id="kegiatan-member-search" placeholder="Cari nama atau NIM..." style="margin-bottom: 8px; height: 36px;" oninput="filterKegiatanMembersList()">
-          </div>
-
-          <!-- Scrollable Grouped Checkbox List -->
-          <div class="checkbox-list-container" id="kegiatan-members-list-container">
-            <!-- Populated by JS -->
-          </div>
-
-          <button id="btn-save-kegiatan" class="btn btn-primary" onclick="handleSaveKegiatan()" style="width: 100%; margin-top: 20px; height: 42px;">
-            Simpan Kegiatan & Partisipasi
-          </button>
-        </div>
-
-        <!-- Right: Riwayat Kegiatan -->
-        <div class="parser-preview-panel" style="flex: 1.8; max-height: 750px; overflow-y: auto;">
-          <h2 class="heading-md" style="color: var(--ink); margin-bottom: 6px;">2. Riwayat Kegiatan Terdaftar</h2>
-          <p style="color: var(--ink-mute); font-size: 12px; margin-bottom: 20px;">
-            Daftar kegiatan yang telah dimasukkan beserta total partisipan yang terlibat.
-          </p>
-
-          <div class="table-responsive" style="max-height: 550px;">
-            <table class="table" style="min-width: auto;">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Nama Kegiatan</th>
-                  <th>Kategori</th>
-                  <th>Tanggal</th>
-                  <th style="text-align: center;">Partisipan</th>
-                </tr>
-              </thead>
-              <tbody id="kegiatan-history-table-body">
-                <!-- Rendered by JS -->
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- ----------------------------------------------------
      * TAB PANEL: BENDAHARA (REKENING & KAS SEMESTER)

@@ -376,6 +376,7 @@ function catatPenugasanBaru(kegiatanDataList, operatorName) {
     for (var i = 1; i < anggotaData.length; i++) {
       anggotaMap[anggotaData[i][0]] = {
         rowIndex: i + 1,
+        nim: String(anggotaData[i][2]),
         panitia: Number(anggotaData[i][6]) || 0,
         delegasiKegiatan: Number(anggotaData[i][7]) || 0,
         delegasiPeserta: Number(anggotaData[i][8]) || 0
@@ -449,6 +450,98 @@ function catatPenugasanBaru(kegiatanDataList, operatorName) {
     // Append all rows
     for (var n = 0; n < logsToWrite.length; n++) {
       kegiatanSheet.appendRow(logsToWrite[n]);
+    }
+    
+    // Sync with the new Kegiatan and Partisipasi_Kegiatan sheets (dynamic keaktifan engine)
+    var sheetNewK = ss.getSheetByName("Kegiatan");
+    var sheetNewP = ss.getSheetByName("Partisipasi_Kegiatan");
+    
+    if (sheetNewK && sheetNewP) {
+      var newKData = sheetNewK.getDataRange().getValues();
+      var newPData = sheetNewP.getDataRange().getValues();
+      
+      // Build lookups of existing Kegiatan by name + kategori -> ID
+      var existingKMap = {};
+      for (var x = 1; x < newKData.length; x++) {
+        var key = String(newKData[x][1]).trim().toLowerCase() + "_" + String(newKData[x][3]).trim().toLowerCase();
+        existingKMap[key] = String(newKData[x][0]);
+      }
+      
+      // Generate next KGT ID
+      var nextKNum = 1;
+      for (var x = 1; x < newKData.length; x++) {
+        var match = String(newKData[x][0]).match(/KGT-(\d+)/);
+        if (match) {
+          var num = parseInt(match[1], 10);
+          if (num >= nextKNum) nextKNum = num + 1;
+        }
+      }
+      
+      // Generate next PRT ID
+      var nextPNum = 1;
+      for (var x = 1; x < newPData.length; x++) {
+        var match = String(newPData[x][0]).match(/PRT-(\d+)/);
+        if (match) {
+          var num = parseInt(match[1], 10);
+          if (num >= nextPNum) nextPNum = num + 1;
+        }
+      }
+      
+      // Build lookups of existing Partisipasi by nim + kegiatan ID -> true
+      var existingPMap = {};
+      for (var x = 1; x < newPData.length; x++) {
+        var key = String(newPData[x][1]) + "_" + String(newPData[x][2]);
+        existingPMap[key] = true;
+      }
+      
+      var newPartisipasisToAppend = [];
+      
+      for (var k = 0; k < kegiatanDataList.length; k++) {
+        var item = kegiatanDataList[k];
+        var namaProker = toTitleCase(item.namaProker.trim());
+        var idAnggota = Number(item.idAnggota);
+        var peran = item.peran;
+        var itemDate = parseLocalDate(item.tanggal);
+        var memberNim = anggotaMap[idAnggota] ? anggotaMap[idAnggota].nim : "";
+        
+        if (!memberNim) continue;
+        
+        var kategori = "Kepanitiaan";
+        if (peran === "Delegasi Kegiatan") kategori = "Delegasi Kegiatan";
+        else if (peran === "Delegasi Peserta") kategori = "Delegasi Peserta";
+        
+        var kKey = namaProker.toLowerCase() + "_" + kategori.toLowerCase();
+        var kId = existingKMap[kKey];
+        
+        if (!kId) {
+          kId = "KGT-" + String(nextKNum++).padStart(3, '0');
+          existingKMap[kKey] = kId;
+          
+          sheetNewK.appendRow([
+            kId,
+            namaProker,
+            itemDate,
+            kategori
+          ]);
+        }
+        
+        var pKey = memberNim + "_" + kId;
+        if (!existingPMap[pKey]) {
+          var pId = "PRT-" + String(nextPNum++).padStart(4, '0');
+          existingPMap[pKey] = true;
+          
+          newPartisipasisToAppend.push([
+            pId,
+            memberNim,
+            kId
+          ]);
+        }
+      }
+      
+      if (newPartisipasisToAppend.length > 0) {
+        var pLastRow = sheetNewP.getLastRow();
+        sheetNewP.getRange(pLastRow + 1, 1, newPartisipasisToAppend.length, 3).setValues(newPartisipasisToAppend);
+      }
     }
     
     // Update master counters in Anggota sheet

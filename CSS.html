@@ -1190,7 +1190,14 @@ textarea.form-control {
 /* ----------------------------------------------------
  * RESPONSIVENESS OVERRIDES
  * ---------------------------------------------------- */
+.only-mobile {
+  display: none !important;
+}
+
 @media (max-width: 768px) {
+  .only-mobile {
+    display: flex !important;
+  }
   .sidebar {
     transform: translateX(-100%);
     width: 240px;

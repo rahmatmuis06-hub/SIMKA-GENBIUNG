@@ -87,6 +87,10 @@ function showMainApp() {
   const isKadiv = currentOperator.jabatan === 'Kadiv';
   document.getElementById("nav-admin").style.display = isKadiv ? "none" : "flex";
   
+  // Hide Bendahara tab navigation for non-Bendahara
+  const isBendahara = currentOperator.jabatan === 'Bendahara';
+  document.getElementById("nav-bendahara").style.display = isBendahara ? "flex" : "none";
+  
   // 2. Hide Add Member button for Kadiv
   const btnAdd = document.getElementById("btn-tambah-anggota");
   if (btnAdd) {
@@ -130,6 +134,13 @@ function showTab(tabId) {
     showTab('dashboard-tab');
     return;
   }
+  
+  // Security check: Non-Bendahara cannot access Bendahara tab
+  if (tabId === 'bendahara-tab' && currentOperator.jabatan !== 'Bendahara') {
+    showToast("Akses ditolak: Halaman Bendahara hanya dapat diakses oleh Bendahara Komisariat.", "error");
+    showTab('dashboard-tab');
+    return;
+  }
 
   // Hide all tabs
   const tabs = document.querySelectorAll(".tab-panel");
@@ -155,8 +166,6 @@ function showTab(tabId) {
     renderMembersTable();
   } else if (tabId === 'input-tab') {
     initInputTabDates();
-  } else if (tabId === 'kegiatan-tab') {
-    initKegiatanTab();
   } else if (tabId === 'bendahara-tab') {
     initBendaharaTab();
   } else if (tabId === 'grade-tab') {
@@ -249,12 +258,10 @@ function loadAllData() {
           renderMembersTable();
           populateAnggotaDropdowns();
           
-          // Refresh active tab if it's Kegiatan or Bendahara
+          // Refresh active tab if it's Bendahara
           const activeItem = document.querySelector(".nav-item.active");
           if (activeItem) {
-            if (activeItem.getAttribute("onclick").includes("kegiatan-tab")) {
-              initKegiatanTab();
-            } else if (activeItem.getAttribute("onclick").includes("bendahara-tab")) {
+            if (activeItem.getAttribute("onclick").includes("bendahara-tab")) {
               initBendaharaTab();
             }
           }
@@ -1589,198 +1596,7 @@ function openProkerDetail(prokerName) {
     .getParticipantsByProker(prokerName);
 }
 
-// ====================================================
-// KEGIATAN & PARTISIPASI CLIENT SIDE LOGIC
-// ====================================================
-function initKegiatanTab() {
-  const dateInput = document.getElementById("kegiatan-tanggal");
-  if (dateInput && !dateInput.value) {
-    dateInput.value = getTodayDateString();
-  }
-  
-  loadDaftarAnggotaCheckbox();
-  loadRiwayatKegiatan();
-}
 
-function loadDaftarAnggotaCheckbox() {
-  const container = document.getElementById("kegiatan-members-list-container");
-  if (!container) return;
-  
-  let listAnggota = anggotaList.filter(a => a.jabatan === "Anggota");
-  
-  const grouped = {};
-  listAnggota.forEach(a => {
-    if (!grouped[a.divisi]) {
-      grouped[a.divisi] = [];
-    }
-    grouped[a.divisi].push(a);
-  });
-  
-  container.innerHTML = "";
-  
-  const divisions = [
-    "Pendidikan",
-    "Kominfo",
-    "Lingkungan Hidup",
-    "Kesehatan Masyarakat",
-    "Kewirausahaan",
-    "Potensi Diri"
-  ];
-  
-  divisions.forEach(div => {
-    const members = grouped[div] || [];
-    if (members.length === 0) return;
-    
-    const header = document.createElement("div");
-    header.className = "checkbox-group-header";
-    header.textContent = div;
-    container.appendChild(header);
-    
-    members.forEach(a => {
-      const item = document.createElement("label");
-      item.className = "checkbox-item";
-      item.dataset.search = `${a.nama.toLowerCase()} ${a.nim}`;
-      item.innerHTML = `
-        <input type="checkbox" name="kegiatan-member-checkbox" value="${a.nim}">
-        <span>${a.nama} (${a.nim})</span>
-      `;
-      container.appendChild(item);
-    });
-  });
-  
-  if (container.children.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:24px;color:var(--ink-mute);font-size:12px;">Tidak ada data anggota.</div>';
-  }
-}
-
-function selectAllKegiatanMembers(checked) {
-  const checkboxes = document.querySelectorAll('input[name="kegiatan-member-checkbox"]');
-  checkboxes.forEach(cb => {
-    const parentLabel = cb.closest('.checkbox-item');
-    if (parentLabel && parentLabel.style.display !== "none") {
-      cb.checked = checked;
-    }
-  });
-}
-
-function filterKegiatanMembersList() {
-  const query = document.getElementById("kegiatan-member-search").value.trim().toLowerCase();
-  const items = document.querySelectorAll("#kegiatan-members-list-container .checkbox-item");
-  
-  items.forEach(item => {
-    const text = item.dataset.search || "";
-    if (text.includes(query)) {
-      item.style.display = "flex";
-    } else {
-      item.style.display = "none";
-    }
-  });
-  
-  let currentHeader = null;
-  let hasVisibleInGroup = false;
-  
-  const children = document.getElementById("kegiatan-members-list-container").children;
-  for (let i = 0; i < children.length; i++) {
-    const child = children[i];
-    if (child.classList.contains("checkbox-group-header")) {
-      if (currentHeader) {
-        currentHeader.style.display = hasVisibleInGroup ? "block" : "none";
-      }
-      currentHeader = child;
-      hasVisibleInGroup = false;
-    } else if (child.classList.contains("checkbox-item")) {
-      if (child.style.display !== "none") {
-        hasVisibleInGroup = true;
-      }
-    }
-  }
-  if (currentHeader) {
-    currentHeader.style.display = hasVisibleInGroup ? "block" : "none";
-  }
-}
-
-function loadRiwayatKegiatan() {
-  const tbody = document.getElementById("kegiatan-history-table-body");
-  if (!tbody) return;
-  
-  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--ink-mute)">Memuat riwayat...</td></tr>';
-  
-  google.script.run
-    .withSuccessHandler(function(list) {
-      tbody.innerHTML = "";
-      if (list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--ink-mute)">Belum ada kegiatan terdaftar.</td></tr>';
-        return;
-      }
-      
-      list.forEach(k => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><span class="badge badge-primary" style="font-family: monospace;">${k.id}</span></td>
-          <td style="font-weight: 500;">${k.nama}</td>
-          <td><span class="badge badge-secondary">${k.kategori}</span></td>
-          <td>${k.tanggal}</td>
-          <td style="text-align: center; font-weight: 600; color: var(--primary);">${k.partisipan.length} Anggota</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    })
-    .withFailureHandler(function(err) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--ruby);padding:24px;">Gagal memuat: ${err.message}</td></tr>`;
-    })
-    .getSemuaKegiatan();
-}
-
-function handleSaveKegiatan() {
-  const nama = document.getElementById("kegiatan-nama").value.trim();
-  const kategori = document.getElementById("kegiatan-kategori").value;
-  const tanggal = document.getElementById("kegiatan-tanggal").value;
-  
-  if (!nama) {
-    showToast("Harap isi Nama Kegiatan.", "error");
-    return;
-  }
-  if (!tanggal) {
-    showToast("Harap isi Tanggal Kegiatan.", "error");
-    return;
-  }
-  
-  const checkedNIMs = [];
-  const checkboxes = document.querySelectorAll('input[name="kegiatan-member-checkbox"]:checked');
-  checkboxes.forEach(cb => {
-    checkedNIMs.push(cb.value);
-  });
-  
-  if (checkedNIMs.length === 0) {
-    showToast("Pilih minimal satu anggota partisipan.", "error");
-    return;
-  }
-  
-  const dataKegiatan = {
-    namaKegiatan: nama,
-    kategori: kategori,
-    tanggalKegiatan: tanggal
-  };
-  
-  showLoader();
-  google.script.run
-    .withSuccessHandler(function(res) {
-      hideLoader();
-      showToast(`Kegiatan ${res.idKegiatan} berhasil disimpan dengan ${res.count} partisipan.`, "success");
-      
-      document.getElementById("kegiatan-nama").value = "";
-      document.getElementById("kegiatan-member-search").value = "";
-      selectAllKegiatanMembers(false);
-      
-      loadAllData();
-      initKegiatanTab();
-    })
-    .withFailureHandler(function(err) {
-      hideLoader();
-      showToast("Gagal menyimpan kegiatan: " + err.message, "error");
-    })
-    .simpanKegiatanDanPartisipasi(dataKegiatan, checkedNIMs, currentOperator.nama);
-}
 
 // ====================================================
 // BENDAHARA & KAS CLIENT SIDE LOGIC
