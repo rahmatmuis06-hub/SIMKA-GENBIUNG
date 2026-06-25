@@ -1639,7 +1639,7 @@ function renderKasTable(list) {
   const tbody = document.getElementById("kas-table-body");
   tbody.innerHTML = "";
   
-  const filteredList = list.filter(a => a.jabatan === "Anggota");
+  const filteredList = list;
   
   if (filteredList.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--ink-mute)">Tidak ada data anggota.</td></tr>';
@@ -1660,9 +1660,18 @@ function renderKasTable(list) {
     const statusClass = isLunas ? "lunas" : "belum-lunas";
     const statusText = isLunas ? "✅ Lunas" : "❌ Belum Lunas";
     
+    let jabBadge = "";
+    if (a.jabatan === "Ketua") {
+      jabBadge = ` <span class="badge badge-gold" style="font-size: 8px; padding: 2px 4px; vertical-align: middle;">Ketua</span>`;
+    } else if (a.jabatan === "Sekretaris" || a.jabatan === "Bendahara") {
+      jabBadge = ` <span class="badge badge-primary" style="font-size: 8px; padding: 2px 4px; vertical-align: middle;">${a.jabatan}</span>`;
+    } else if (a.jabatan === "Kadiv") {
+      jabBadge = ` <span class="badge badge-blue" style="font-size: 8px; padding: 2px 4px; vertical-align: middle;">Kadiv</span>`;
+    }
+    
     tr.innerHTML = `
       <td class="text-nowrap">${index + 1}</td>
-      <td style="font-weight: 500;">${a.nama}</td>
+      <td style="font-weight: 500;">${a.nama}${jabBadge}</td>
       <td class="text-tabular text-nowrap">${a.nim}</td>
       <td class="text-nowrap">${a.divisi}</td>
       <td class="text-nowrap">Gel. ${a.penerimaanKe}</td>
@@ -1684,7 +1693,7 @@ function updateKasSummary(list) {
   const label = document.getElementById("kas-percentage-label");
   const fill = document.getElementById("kas-progress-fill-element");
   
-  const tacticalList = list.filter(a => a.jabatan === "Anggota");
+  const tacticalList = list;
   const total = tacticalList.length;
   const lunasCount = tacticalList.filter(a => a.status === "Lunas").length;
   
@@ -1747,7 +1756,7 @@ function exportKasToExcel() {
     ["No", "Nama Lengkap", "NIM", "Divisi", "Gelombang", "Status Kas", "Tanggal Bayar"]
   ];
   
-  const tacticalList = currentKasList.filter(a => a.jabatan === "Anggota");
+  const tacticalList = currentKasList;
   
   const divFilter = document.getElementById("kas-filter-divisi").value;
   const penFilter = document.getElementById("kas-filter-penerimaan").value;
@@ -1760,9 +1769,10 @@ function exportKasToExcel() {
     const matchesSearch = !searchInput || a.nama.toLowerCase().includes(searchInput) || String(a.nim).includes(searchInput);
     
     if (matchesDivisi && matchesPenerimaan && matchesSearch) {
+      const displayName = a.nama + (a.jabatan !== "Anggota" ? ` (${a.jabatan})` : "");
       rows.push([
         index++,
-        a.nama,
+        displayName,
         a.nim,
         a.divisi,
         `Gelombang ${a.penerimaanKe}`,
@@ -1784,7 +1794,7 @@ function renderRekeningTable() {
   if (!tbody) return;
   tbody.innerHTML = "";
   
-  const list = anggotaList.filter(a => a.jabatan === "Anggota");
+  const list = anggotaList;
   
   if (list.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--ink-mute)">Tidak ada data anggota.</td></tr>';
@@ -1798,9 +1808,18 @@ function renderRekeningTable() {
     tr.dataset.penerimaan = a.penerimaanKe;
     tr.dataset.search = `${a.nama.toLowerCase()} ${a.nim}`;
     
+    let jabBadge = "";
+    if (a.jabatan === "Ketua") {
+      jabBadge = ` <span class="badge badge-gold" style="font-size: 8px; padding: 2px 4px; vertical-align: middle;">Ketua</span>`;
+    } else if (a.jabatan === "Sekretaris" || a.jabatan === "Bendahara") {
+      jabBadge = ` <span class="badge badge-primary" style="font-size: 8px; padding: 2px 4px; vertical-align: middle;">${a.jabatan}</span>`;
+    } else if (a.jabatan === "Kadiv") {
+      jabBadge = ` <span class="badge badge-blue" style="font-size: 8px; padding: 2px 4px; vertical-align: middle;">Kadiv</span>`;
+    }
+    
     tr.innerHTML = `
       <td class="text-nowrap">${index + 1}</td>
-      <td style="font-weight: 500;">${a.nama}</td>
+      <td style="font-weight: 500;">${a.nama}${jabBadge}</td>
       <td class="text-tabular text-nowrap">${a.nim}</td>
       <td class="text-nowrap">${a.divisi}</td>
       <td class="text-nowrap">Gel. ${a.penerimaanKe}</td>
@@ -1933,16 +1952,15 @@ function exportRekeningToExcel() {
   
   let index = 1;
   anggotaList.forEach(a => {
-    if (a.jabatan !== "Anggota") return;
-    
     const matchesDivisi = !divFilter || a.divisi === divFilter;
     const matchesPenerimaan = !penFilter || String(a.penerimaanKe) === penFilter;
     const matchesSearch = !searchInput || a.nama.toLowerCase().includes(searchInput) || String(a.nim).includes(searchInput);
     
     if (matchesDivisi && matchesPenerimaan && matchesSearch) {
+      const displayName = a.nama + (a.jabatan !== "Anggota" ? ` (${a.jabatan})` : "");
       rows.push([
         index++,
-        a.nama,
+        displayName,
         a.nim,
         a.divisi,
         `Gelombang ${a.penerimaanKe}`,
