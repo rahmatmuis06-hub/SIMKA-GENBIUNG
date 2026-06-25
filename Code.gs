@@ -1000,6 +1000,160 @@ function importGenbiDataFromSheet(urlOrId) {
   return "Sukses mengimpor " + importedCount + " data anggota GenBI " + sourceDesc + "! Seluruh data lama di sheet 'Anggota' telah diperbarui. PIN login disiapkan (BPH Ketua: 1234, Sek: 5678, Ben: 9999, seluruh Kadiv: 1111).";
 }
 
+function syncRekeningFromSourceSheet(urlOrId) {
+  if (!urlOrId) {
+    throw new Error("URL Spreadsheet wajib diisi.");
+  }
+  
+  var targetSs = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetAnggota = targetSs.getSheetByName("Anggota");
+  if (!sheetAnggota) {
+    throw new Error("Sheet 'Anggota' tidak ditemukan.");
+  }
+  
+  var parsed = parseSpreadsheetUrl(urlOrId);
+  var sourceSsId = parsed.id;
+  var targetGid = parsed.gid;
+  
+  if (!sourceSsId) {
+    throw new Error("ID Spreadsheet tidak valid. Harap periksa URL yang Anda masukkan.");
+  }
+  
+  var sourceSs;
+  try {
+    sourceSs = SpreadsheetApp.openById(sourceSsId);
+  } catch (e) {
+    throw new Error("Gagal mengakses spreadsheet sumber. Pastikan spreadsheet tersebut disetel 'Anyone with the link can view' (Siapa saja dengan link dapat melihat). Detail: " + e.message);
+  }
+  
+  var sourceSheet = null;
+  var sheets = sourceSs.getSheets();
+  if (targetGid) {
+    for (var i = 0; i < sheets.length; i++) {
+      if (sheets[i].getSheetId().toString() === targetGid.toString()) {
+        sourceSheet = sheets[i];
+        break;
+      }
+    }
+  }
+  if (!sourceSheet) {
+    sourceSheet = sheets[0];
+  }
+  
+  var sourceData = sourceSheet.getDataRange().getValues();
+  if (sourceData.length === 0) {
+    throw new Error("Spreadsheet sumber kosong.");
+  }
+  
+  // Dynamic header scanning
+  var headerRowIndex = -1;
+  var colIndices = {
+    nim: -1,
+    nama: -1,
+    rekening: -1
+  };
+  
+  function cleanHeaderStr(str) {
+    return String(str).toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+  }
+  
+  var maxHeaderRowsToCheck = Math.min(15, sourceData.length);
+  var maxScore = -1;
+  
+  for (var r = 0; r < maxHeaderRowsToCheck; r++) {
+    var row = sourceData[r];
+    var tempIndices = { nim: -1, nama: -1, rekening: -1 };
+    var score = 0;
+    
+    for (var c = 0; c < row.length; c++) {
+      var cellVal = cleanHeaderStr(row[c]);
+      if (!cellVal) continue;
+      
+      if (cellVal === "nim" || cellVal.indexOf("induk") > -1 || cellVal.indexOf("nim") > -1) {
+        tempIndices.nim = c;
+        score += 3;
+      } else if (cellVal.indexOf("nama") > -1) {
+        tempIndices.nama = c;
+        score += 3;
+      } else if (cellVal.indexOf("rekening") > -1 || cellVal.indexOf("rek") > -1 || cellVal.indexOf("bni") > -1) {
+        tempIndices.rekening = c;
+        score += 3;
+      }
+    }
+    
+    // We must find at least name/NIM and rekening
+    if ((tempIndices.nama !== -1 || tempIndices.nim !== -1) && tempIndices.rekening !== -1) {
+      if (score > maxScore) {
+        maxScore = score;
+        headerRowIndex = r;
+        colIndices = tempIndices;
+      }
+    }
+  }
+  
+  if (headerRowIndex === -1) {
+    throw new Error("Gagal mendeteksi kolom rekening BNI dan kolom identitas (NIM/Nama) pada spreadsheet sumber. Harap pastikan baris judul berisi kata 'NIM', 'Nama', dan 'Rekening'.");
+  }
+  
+  // Load existing database
+  var anggotaData = sheetAnggota.getDataRange().getValues();
+  if (anggotaData.length <= 1) {
+    throw new Error("Database anggota kosong. Impor data anggota terlebih dahulu.");
+  }
+  
+  var syncCount = 0;
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    
+    // Create a mapping of NIM -> row index (0-indexed) in sheetAnggota
+    var nimToRowIndex = {};
+    var nameToRowIndex = {};
+    
+    for (var i = 1; i < anggotaData.length; i++) {
+      var row = anggotaData[i];
+      var nim = String(row[2]).trim(); // NIM is column C
+      var name = String(row[1]).trim().toLowerCase(); // Name is column B
+      if (nim) {
+        nimToRowIndex[nim] = i + 1; // 1-indexed row number
+      }
+      if (name) {
+        nameToRowIndex[name] = i + 1;
+      }
+    }
+    
+    // Update the values
+    for (var i = headerRowIndex + 1; i < sourceData.length; i++) {
+      var row = sourceData[i];
+      var nimRaw = colIndices.nim !== -1 ? String(row[colIndices.nim]).trim() : "";
+      var namaRaw = colIndices.nama !== -1 ? String(row[colIndices.nama]).trim() : "";
+      var rekeningRaw = colIndices.rekening !== -1 ? String(row[colIndices.rekening]).trim() : "";
+      
+      if (!rekeningRaw) continue;
+      
+      var nimClean = nimRaw.replace(/\D/g, "");
+      var nameClean = namaRaw.trim().toLowerCase();
+      var rekeningClean = rekeningRaw.replace(/\D/g, ""); // Clean non-digits from account number
+      
+      var targetRow = -1;
+      if (nimClean && nimToRowIndex[nimClean]) {
+        targetRow = nimToRowIndex[nimClean];
+      } else if (nameClean && nameToRowIndex[nameClean]) {
+        targetRow = nameToRowIndex[nameClean];
+      }
+      
+      if (targetRow !== -1) {
+        sheetAnggota.getRange(targetRow, 11).setValue(rekeningClean); // Column K (11) is rekeningBNI
+        syncCount++;
+      }
+    }
+  } finally {
+    lock.releaseLock();
+  }
+  
+  return "Sukses mencocokkan dan menyinkronkan " + syncCount + " nomor rekening BNI anggota ke database SIMKA.";
+}
+
 // ----------------------------------------------------
 // MONTHLY ACTIVITY RECAP STATISTICS
 // ----------------------------------------------------

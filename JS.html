@@ -1957,4 +1957,30 @@ function exportRekeningToExcel() {
   XLSX.writeFile(workbook, filename);
   showToast("Database rekening BNI berhasil diekspor.", "success");
 }
+
+function executeSyncRekening() {
+  const url = document.getElementById("sync-rekening-url").value.trim();
+  if (!url) {
+    showToast("URL Spreadsheet wajib diisi.", "error");
+    return;
+  }
+  
+  closeModal("sync-rekening-modal");
+  showLoader();
+  
+  google.script.run
+    .withSuccessHandler(function(msg) {
+      hideLoader();
+      showToast(msg, "success");
+      // Reset input value
+      document.getElementById("sync-rekening-url").value = "";
+      // Reload member data so the new account numbers are displayed!
+      loadAllData();
+    })
+    .withFailureHandler(function(err) {
+      hideLoader();
+      showToast("Sinkronisasi gagal: " + err.message, "error");
+    })
+    .syncRekeningFromSourceSheet(url);
+}
 </script>

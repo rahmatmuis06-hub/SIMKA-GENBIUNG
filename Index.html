@@ -592,9 +592,14 @@
             </select>
             <input type="text" class="form-control" id="rek-search-input" placeholder="Cari nama atau NIM..." oninput="filterRekeningTable()" style="width: 180px; height: 36px; font-size: 13px;">
           </div>
-          <button class="btn btn-secondary export-btn" onclick="exportRekeningToExcel()" style="height: 36px; padding: 0 14px; font-size: 13px; display: flex; align-items: center; gap: 6px;">
-            📥 Ekspor Rekening Excel
-          </button>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn btn-secondary" onclick="openModal('sync-rekening-modal')" style="height: 36px; padding: 0 14px; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+              🔄 Sinkronisasi Rekening
+            </button>
+            <button class="btn btn-secondary export-btn" onclick="exportRekeningToExcel()" style="height: 36px; padding: 0 14px; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+              📥 Ekspor Rekening Excel
+            </button>
+          </div>
         </div>
 
         <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
@@ -1000,6 +1005,29 @@
         </div>
         <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
           <button class="btn btn-secondary" onclick="closeModal('rekap-detail-modal')">Tutup</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: SYNC REKENING -->
+  <div class="modal-overlay" id="sync-rekening-modal">
+    <div class="modal-box" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2 class="heading-lg">Sinkronisasi Rekening Anggota</h2>
+        <button class="modal-close" onclick="closeModal('sync-rekening-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13px; color: var(--ink-mute); margin-bottom: 20px; line-height: 1.5;">
+          Masukkan URL Spreadsheet yang berisi daftar rekening BNI anggota. Sistem akan mencocokkan NIM/Nama dan memperbarui nomor rekening di database secara otomatis.
+        </p>
+        <div class="form-group" style="margin-bottom: 24px;">
+          <label class="form-label" for="sync-rekening-url">URL Google Spreadsheet</label>
+          <input type="text" class="form-control" id="sync-rekening-url" placeholder="https://docs.google.com/spreadsheets/d/..." required>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:28px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('sync-rekening-modal')">Batal</button>
+          <button type="button" class="btn btn-primary" onclick="executeSyncRekening()">Mulai Sinkronisasi</button>
         </div>
       </div>
     </div>
